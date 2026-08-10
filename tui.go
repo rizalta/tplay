@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/anacrolix/torrent"
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,4 +60,67 @@ func (m model) View() string {
 	}
 
 	return ret
+}
+
+type bufferModel struct {
+	torrent    *torrent.Torrent
+	firstPiece int
+	lastPiece  int
+	k          int
+	done       bool
+}
+
+func newBufferModel(torrent *torrent.Torrent, firstPiece, lastPiece, k int) *bufferModel {
+	return &bufferModel{
+		torrent:    torrent,
+		firstPiece: firstPiece,
+		lastPiece:  lastPiece,
+		k:          k,
+	}
+}
+
+type tickMsg struct{}
+
+func (bm bufferModel) Init() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
+}
+
+func (bm bufferModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tickMsg:
+		firstDone := true
+		for i := bm.firstPiece; i < bm.firstPiece+bm.k; i++ {
+			if !bm.torrent.Piece(i).State().Complete {
+				firstDone = false
+				break
+			}
+		}
+
+		lastDone := true
+		for i := bm.lastPiece - 1; i >= bm.lastPiece-bm.k; i-- {
+			if !bm.torrent.Piece(i).State().Complete {
+				lastDone = false
+				break
+			}
+		}
+
+		if firstDone && lastDone {
+			bm.done = true
+			return bm, tea.Quit
+		}
+	}
+
+	return bm, tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
+}
+
+func (bm bufferModel) View() string {
+	if bm.done {
+		return "Ready\n"
+	}
+
+	return "Buffering...\n"
 }

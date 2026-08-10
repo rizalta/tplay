@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
-	"time"
 
 	"github.com/anacrolix/torrent"
 	tea "github.com/charmbracelet/bubbletea"
@@ -72,31 +72,11 @@ func bufferFile(t *torrent.Torrent, f *torrent.File) torrent.Reader {
 		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
 
-	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
-		firstDone := true
-		for i := firstPiece; i < firstPiece+k; i++ {
-			if !t.Piece(i).State().Complete {
-				firstDone = false
-				break
-			}
-		}
-
-		lastDone := true
-		for i := lastPiece - 1; i >= lastPiece-k; i-- {
-			if !t.Piece(i).State().Complete {
-				lastDone = false
-				break
-			}
-		}
-
-		fmt.Printf("\rBuffering...")
-		if firstDone && lastDone {
-			ticker.Stop()
-			break
-		}
+	p := tea.NewProgram(newBufferModel(t, firstPiece, lastPiece, k))
+	_, err := p.Run()
+	if err != nil {
+		log.Printf("error buffering: %v\n", err)
 	}
-	fmt.Println()
 
 	reader := f.NewReader()
 	reader.SetReadahead(64 << 20)
