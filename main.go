@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -14,8 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/anacrolix/torrent"
 )
 
 func main() {
@@ -23,9 +19,9 @@ func main() {
 		fmt.Println("requires magnet link")
 		return
 	}
-	magnetURI := os.Args[1]
+	uri := os.Args[1]
 
-	if !strings.HasPrefix(magnetURI, "magnet:?") {
+	if !strings.HasPrefix(uri, "magnet:?") {
 		fmt.Println("invalid magnet link")
 		return
 	}
@@ -39,21 +35,16 @@ func main() {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
 
-	cfg := torrent.NewDefaultClientConfig()
-	cfg.DataDir = dataDir
-	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	c, err := torrent.NewClient(cfg)
+	c, err := newClient(dataDir)
 	if err != nil {
 		log.Fatalf("failed to initialize torrent client: %v", err)
 	}
 	defer c.Close()
 
-	t, err := c.AddMagnet(magnetURI)
+	t, err := addMagnet(c, uri)
 	if err != nil {
 		log.Fatalf("failed to add torrent: %v", err)
 	}
-
-	<-t.GotInfo()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -64,71 +55,14 @@ func main() {
 		os.Exit(0)
 	}()
 
-	files := t.Files()
-
-	sel := 0
-
-	if len(files) != 1 {
-		for i, f := range files {
-			fmt.Printf("[%d] %s\n", i, f.DisplayPath())
-		}
-
-		fmt.Printf("enter your selection: ")
-		if _, err := fmt.Scanf("%d", &sel); err != nil {
-			log.Fatalf("error reading input: %v", err)
-		}
-
-		if sel < 0 || sel >= len(files) {
-			log.Fatalf("invalid selector")
-		}
+	f, err := selectFile(t)
+	if err != nil {
+		log.Fatalf("failed to select file: %v", err)
 	}
 
-	f := files[sel]
 	fmt.Printf("playing: %s\n", f.DisplayPath())
 
-	f.SetPriority(torrent.PiecePriorityNormal)
-
-	firstPiece := f.BeginPieceIndex()
-	lastPiece := f.EndPieceIndex()
-
-	k := max(1, (lastPiece-firstPiece)/20)
-
-	for i := firstPiece; i < firstPiece+k; i++ {
-		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
-	}
-
-	for i := lastPiece - 1; i >= lastPiece-k; i-- {
-		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
-	}
-
-	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
-		firstDone := true
-		for i := firstPiece; i < firstPiece+k; i++ {
-			if !t.Piece(i).State().Complete {
-				firstDone = false
-				break
-			}
-		}
-
-		lastDone := true
-		for i := lastPiece - 1; i >= lastPiece-k; i-- {
-			if !t.Piece(i).State().Complete {
-				lastDone = false
-				break
-			}
-		}
-
-		fmt.Printf("\rBuffering...")
-		if firstDone && lastDone {
-			ticker.Stop()
-			break
-		}
-	}
-	fmt.Println()
-
-	reader := f.NewReader()
-	reader.SetReadahead(64 << 20)
+	reader := bufferFile(t, f)
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
