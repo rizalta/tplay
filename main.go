@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/anacrolix/torrent"
@@ -27,7 +30,17 @@ func main() {
 		return
 	}
 
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		log.Fatalf("failed to get cache dir: %v", err)
+	}
+	dataDir := filepath.Join(cacheDir, "tplay")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Fatalf("failed to create data dir: %v", err)
+	}
+
 	cfg := torrent.NewDefaultClientConfig()
+	cfg.DataDir = dataDir
 	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	c, err := torrent.NewClient(cfg)
 	if err != nil {
@@ -41,6 +54,15 @@ func main() {
 	}
 
 	<-t.GotInfo()
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		c.Close()
+		_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
+		os.Exit(0)
+	}()
 
 	files := t.Files()
 
@@ -61,9 +83,51 @@ func main() {
 		}
 	}
 
-	file := files[sel]
+	f := files[sel]
+	fmt.Printf("playing: %s\n", f.DisplayPath())
 
-	reader := file.NewReader()
+	f.SetPriority(torrent.PiecePriorityNormal)
+
+	firstPiece := f.BeginPieceIndex()
+	lastPiece := f.EndPieceIndex()
+
+	k := max(1, (lastPiece-firstPiece)/20)
+
+	for i := firstPiece; i < firstPiece+k; i++ {
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
+	}
+
+	for i := lastPiece - 1; i >= lastPiece-k; i-- {
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		firstDone := true
+		for i := firstPiece; i < firstPiece+k; i++ {
+			if !t.Piece(i).State().Complete {
+				firstDone = false
+				break
+			}
+		}
+
+		lastDone := true
+		for i := lastPiece - 1; i >= lastPiece-k; i-- {
+			if !t.Piece(i).State().Complete {
+				lastDone = false
+				break
+			}
+		}
+
+		fmt.Printf("\rBuffering...")
+		if firstDone && lastDone {
+			ticker.Stop()
+			break
+		}
+	}
+	fmt.Println()
+
+	reader := f.NewReader()
 	reader.SetReadahead(64 << 20)
 
 	ln, err := net.Listen("tcp", ":0")
@@ -71,10 +135,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Listening on:", ln.Addr())
-
 	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, file.DisplayPath(), time.Now(), reader)
+		http.ServeContent(w, r, f.DisplayPath(), time.Time{}, reader)
 	})
 
 	go func() {
@@ -89,4 +151,6 @@ func main() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
+
+	_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
 }
