@@ -20,11 +20,12 @@ func main() {
 	flag.Parse()
 
 	args := flag.Args()
-	if len(args) < 1 {
-		fmt.Println("requires magnet link")
-		return
+	var uri string
+	if len(args) >= 1 {
+		uri = args[0]
+	} else {
+		uri = runInputScreen()
 	}
-	uri := args[0]
 
 	if !strings.HasPrefix(uri, "magnet:?") {
 		fmt.Println("invalid magnet link")

@@ -115,3 +115,11 @@ func cleanOldCache(dataDir string) error {
 
 	return nil
 }
+
+func runInputScreen() string {
+	p := tea.NewProgram(newAppModel())
+	result, _ := p.Run()
+	m := result.(appModel)
+
+	return m.uri
+}

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/anacrolix/torrent"
@@ -14,6 +15,49 @@ var (
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#CBA6F7"))
 	normalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#585B70"))
 )
+
+type appModel struct {
+	input textinput.Model
+	uri   string
+}
+
+func newAppModel() *appModel {
+	ti := textinput.New()
+	ti.Focus()
+	ti.Placeholder = "magnet:?xt=..."
+	ti.CharLimit = 0
+	ti.SetWidth(60)
+
+	return &appModel{
+		input: ti,
+	}
+}
+
+func (am appModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			am.uri = am.input.Value()
+			return am, tea.Quit
+
+		case "esc", "ctrl+c":
+			return am, tea.Quit
+
+		}
+	}
+	var cmd tea.Cmd
+	am.input, cmd = am.input.Update(msg)
+	return am, cmd
+}
+
+func (am appModel) View() tea.View {
+	return tea.NewView(am.input.View())
+}
 
 type model struct {
 	files    []*torrent.File
