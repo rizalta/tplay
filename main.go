@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -15,11 +16,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	noCache := flag.Bool("no-cache", false, "delete download data after playing")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 1 {
 		fmt.Println("requires magnet link")
 		return
 	}
-	uri := os.Args[1]
+	uri := args[0]
 
 	if !strings.HasPrefix(uri, "magnet:?") {
 		fmt.Println("invalid magnet link")
@@ -45,10 +50,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to add torrent: %v", err)
 	}
+	torrentPath := filepath.Join(dataDir, t.Info().Name)
 
 	cleanup := func() {
 		c.Close()
-		_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
+		_ = os.RemoveAll(torrentPath)
 	}
 
 	sig := make(chan os.Signal, 1)
@@ -68,6 +74,11 @@ func main() {
 	if reader == nil {
 		cleanup()
 		return
+	}
+
+	now := time.Now()
+	if err := os.Chtimes(torrentPath, now, now); err != nil {
+		log.Printf("failed to change mtime: %v", err)
 	}
 
 	fmt.Println(selectedStyle.Render("playing: " + f.DisplayPath()))
@@ -94,5 +105,7 @@ func main() {
 	cmd.Stderr = os.Stderr
 	_ = cmd.Run()
 
-	_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
+	if *noCache {
+		_ = os.RemoveAll(torrentPath)
+	}
 }
