@@ -3,9 +3,10 @@ package main
 import (
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/anacrolix/torrent"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 var (
@@ -55,29 +56,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
-	ret := titleStyle.Render("Select the file:") + "\n"
+func (m model) View() tea.View {
+	s := titleStyle.Render("Select the file:") + "\n"
 	for i, f := range m.files {
 		if m.cursor == i {
-			ret += selectedStyle.Render("> "+f.DisplayPath()) + "\n"
+			s += selectedStyle.Render("> "+f.DisplayPath()) + "\n"
 		} else {
-			ret += normalStyle.Render("  "+f.DisplayPath()) + "\n"
+			s += normalStyle.Render("  "+f.DisplayPath()) + "\n"
 		}
 	}
 
-	return ret
+	return tea.NewView(s)
 }
 
 type bufferModel struct {
+	spinner    spinner.Model
 	torrent    *torrent.Torrent
 	firstPiece int
 	lastPiece  int
 	k          int
 	done       bool
+	quit       bool
 }
 
 func newBufferModel(torrent *torrent.Torrent, firstPiece, lastPiece, k int) *bufferModel {
+	s := spinner.New()
+	s.Spinner = spinner.Ellipsis
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#CBA6F7"))
 	return &bufferModel{
+		spinner:    s,
 		torrent:    torrent,
 		firstPiece: firstPiece,
 		lastPiece:  lastPiece,
@@ -88,13 +95,26 @@ func newBufferModel(torrent *torrent.Torrent, firstPiece, lastPiece, k int) *buf
 type tickMsg struct{}
 
 func (bm bufferModel) Init() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+	return tea.Batch(
+		bm.spinner.Tick,
+		tea.Tick(time.Second, func(t time.Time) tea.Msg {
+			return tickMsg{}
+		}),
+	)
 }
 
 func (bm bufferModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q":
+			bm.quit = true
+			return bm, tea.Quit
+		}
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		bm.spinner, cmd = bm.spinner.Update(msg)
+		return bm, cmd
 	case tickMsg:
 		firstDone := true
 		for i := bm.firstPiece; i < bm.firstPiece+bm.k; i++ {
@@ -123,10 +143,13 @@ func (bm bufferModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	})
 }
 
-func (bm bufferModel) View() string {
+func (bm bufferModel) View() tea.View {
+	var s string
 	if bm.done {
-		return "Ready\n"
+		s = titleStyle.Render("Ready") + "\n"
+	} else {
+		s = selectedStyle.Render("Buffering") + bm.spinner.View() + "\n"
 	}
 
-	return "Buffering...\n"
+	return tea.NewView(s)
 }

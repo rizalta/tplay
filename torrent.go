@@ -6,8 +6,8 @@ import (
 	"log"
 	"log/slog"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func newClient(dataDir string) (*torrent.Client, error) {
@@ -73,9 +73,13 @@ func bufferFile(t *torrent.Torrent, f *torrent.File) torrent.Reader {
 	}
 
 	p := tea.NewProgram(newBufferModel(t, firstPiece, lastPiece, k))
-	_, err := p.Run()
+	bufferResult, err := p.Run()
 	if err != nil {
 		log.Printf("error buffering: %v\n", err)
+	}
+	bm := bufferResult.(bufferModel)
+	if bm.quit {
+		return nil
 	}
 
 	reader := f.NewReader()

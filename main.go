@@ -46,12 +46,16 @@ func main() {
 		log.Fatalf("failed to add torrent: %v", err)
 	}
 
+	cleanup := func() {
+		c.Close()
+		_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sig
-		c.Close()
-		_ = os.RemoveAll(filepath.Join(dataDir, t.Info().Name))
+		cleanup()
 		os.Exit(0)
 	}()
 
@@ -60,9 +64,13 @@ func main() {
 		log.Fatalf("failed to select file: %v", err)
 	}
 
-	fmt.Printf("playing: %s\n", f.DisplayPath())
-
 	reader := bufferFile(t, f)
+	if reader == nil {
+		cleanup()
+		return
+	}
+
+	fmt.Println(selectedStyle.Render("playing: " + f.DisplayPath()))
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
