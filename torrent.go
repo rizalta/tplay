@@ -7,13 +7,17 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
 )
 
-const maxDays = 5 * 24 * time.Hour
+const (
+	maxDays       = 5 * 24 * time.Hour
+	bufferPercent = 2
+)
 
 func newClient(dataDir string) (*torrent.Client, error) {
 	cfg := torrent.NewDefaultClientConfig()
@@ -67,7 +71,7 @@ func bufferFile(t *torrent.Torrent, f *torrent.File) torrent.Reader {
 	firstPiece := f.BeginPieceIndex()
 	lastPiece := f.EndPieceIndex()
 
-	k := max(1, (lastPiece-firstPiece)/20)
+	k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
 
 	for i := firstPiece; i < firstPiece+k; i++ {
 		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
@@ -100,16 +104,18 @@ func cleanOldCache(dataDir string) error {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			entryPath := filepath.Join(dataDir, entry.Name())
-			stat, err := os.Stat(entryPath)
-			if err != nil {
-				continue
-			}
+		if strings.HasPrefix(entry.Name(), ".torrent") {
+			continue
+		}
 
-			if time.Since(stat.ModTime()) > maxDays {
-				_ = os.RemoveAll(entryPath)
-			}
+		entryPath := filepath.Join(dataDir, entry.Name())
+		stat, err := os.Stat(entryPath)
+		if err != nil {
+			continue
+		}
+
+		if time.Since(stat.ModTime()) > maxDays {
+			_ = os.RemoveAll(entryPath)
 		}
 	}
 
@@ -122,4 +128,9 @@ func runInputScreen() string {
 	m := result.(appModel)
 
 	return m.uri
+}
+
+func torrentPaths(dataDir, name string) ([]string, error) {
+	torrentPath := filepath.Join(dataDir, name)
+	return filepath.Glob(torrentPath + "*")
 }

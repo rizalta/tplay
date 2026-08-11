@@ -25,6 +25,9 @@ func main() {
 		uri = args[0]
 	} else {
 		uri = runInputScreen()
+		if uri == "" {
+			return
+		}
 	}
 
 	if !strings.HasPrefix(uri, "magnet:?") {
@@ -55,11 +58,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to add torrent: %v", err)
 	}
-	torrentPath := filepath.Join(dataDir, t.Info().Name)
+	torrentPaths, err := torrentPaths(dataDir, t.Name())
+	if err != nil {
+		log.Fatalf("failed to get torrent paths: %v", err)
+	}
 
 	cleanup := func() {
 		c.Close()
-		_ = os.RemoveAll(torrentPath)
+		for _, tp := range torrentPaths {
+			_ = os.RemoveAll(tp)
+		}
 	}
 
 	sig := make(chan os.Signal, 1)
@@ -82,8 +90,10 @@ func main() {
 	}
 
 	now := time.Now()
-	if err := os.Chtimes(torrentPath, now, now); err != nil {
-		log.Printf("failed to change mtime: %v", err)
+	for _, tp := range torrentPaths {
+		if err := os.Chtimes(tp, now, now); err != nil {
+			log.Printf("failed to change mtime: %v", err)
+		}
 	}
 
 	fmt.Println(selectedStyle.Render("playing: " + f.DisplayPath()))
@@ -111,6 +121,8 @@ func main() {
 	_ = cmd.Run()
 
 	if *noCache {
-		_ = os.RemoveAll(torrentPath)
+		for _, tp := range torrentPaths {
+			_ = os.RemoveAll(tp)
+		}
 	}
 }
