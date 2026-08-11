@@ -5,10 +5,15 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
 )
+
+const maxDays = 5 * 24 * time.Hour
 
 func newClient(dataDir string) (*torrent.Client, error) {
 	cfg := torrent.NewDefaultClientConfig()
@@ -86,4 +91,27 @@ func bufferFile(t *torrent.Torrent, f *torrent.File) torrent.Reader {
 	reader.SetReadahead(64 << 20)
 
 	return reader
+}
+
+func cleanOldCache(dataDir string) error {
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			entryPath := filepath.Join(dataDir, entry.Name())
+			stat, err := os.Stat(entryPath)
+			if err != nil {
+				continue
+			}
+
+			if time.Since(stat.ModTime()) > maxDays {
+				_ = os.RemoveAll(entryPath)
+			}
+		}
+	}
+
+	return nil
 }

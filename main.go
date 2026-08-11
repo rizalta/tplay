@@ -40,6 +40,10 @@ func main() {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
 
+	if err := cleanOldCache(dataDir); err != nil {
+		log.Printf("error cleaning cache: %v", err)
+	}
+
 	c, err := newClient(dataDir)
 	if err != nil {
 		log.Fatalf("failed to initialize torrent client: %v", err)
