@@ -1,11 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/anacrolix/torrent"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+var (
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#89B4FA"))
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#CBA6F7"))
+	normalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#585B70"))
 )
 
 type model struct {
@@ -50,12 +56,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	ret := ""
+	ret := titleStyle.Render("Select the file:") + "\n"
 	for i, f := range m.files {
 		if m.cursor == i {
-			ret += fmt.Sprintf("> %s\n", f.DisplayPath())
+			ret += selectedStyle.Render("> "+f.DisplayPath()) + "\n"
 		} else {
-			ret += fmt.Sprintf("  %s\n", f.DisplayPath())
+			ret += normalStyle.Render("  "+f.DisplayPath()) + "\n"
 		}
 	}
 
