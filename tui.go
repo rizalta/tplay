@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -16,184 +18,229 @@ var (
 	normalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#585B70"))
 )
 
+type screen int
+
+const (
+	screenInput screen = iota
+	screenLoading
+	screenSelect
+	screenBuffer
+)
+
+const bufferPercent = 2
+
 type appModel struct {
-	input textinput.Model
-	uri   string
+	screen  screen
+	input   textinput.Model
+	spinner spinner.Model
+	cursor  int
+	torrent *torrent.Torrent
+	client  *torrent.Client
+	file    *torrent.File
+	done    bool
+	err     error
 }
 
-func newAppModel() *appModel {
+func newAppModel(c *torrent.Client) *appModel {
 	ti := textinput.New()
 	ti.Focus()
 	ti.Placeholder = "magnet:?xt=..."
 	ti.CharLimit = 0
 	ti.SetWidth(60)
+	s := spinner.New()
+	s.Spinner = spinner.Ellipsis
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#CBA6F7"))
 
 	return &appModel{
-		input: ti,
+		screen:  screenInput,
+		input:   ti,
+		spinner: s,
+		client:  c,
 	}
 }
 
+type tickMsg struct{}
+
 func (am appModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(
+		textinput.Blink,
+		am.spinner.Tick,
+	)
 }
 
 func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter":
-			am.uri = am.input.Value()
-			return am, tea.Quit
-
 		case "esc", "ctrl+c":
 			return am, tea.Quit
+		}
 
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		am.spinner, cmd = am.spinner.Update(msg)
+		return am, cmd
+	}
+
+	switch am.screen {
+	case screenInput:
+		return am.updateInput(msg)
+	case screenLoading:
+		return am.updateLoading(msg)
+	case screenSelect:
+		return am.updateSelect(msg)
+	case screenBuffer:
+		return am.updateBuffer(msg)
+	}
+
+	return am, nil
+}
+
+func (am appModel) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		if key.String() == "enter" {
+			uri := am.input.Value()
+			if !strings.HasPrefix(uri, "magnet:?xt=") {
+				am.err = fmt.Errorf("invalid magnet link")
+				return am, nil
+			}
+			am.screen = screenLoading
+			return am, loadTorrentCmd(am.client, uri)
 		}
 	}
+
 	var cmd tea.Cmd
 	am.input, cmd = am.input.Update(msg)
 	return am, cmd
 }
 
-func (am appModel) View() tea.View {
-	return tea.NewView(am.input.View())
-}
-
-type model struct {
-	files    []*torrent.File
-	cursor   int
-	selector int
-}
-
-func newModel(files []*torrent.File) *model {
-	return &model{
-		files:    files,
-		cursor:   0,
-		selector: -1,
+func (am appModel) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case loadTorrentMsg:
+		if msg.err != nil {
+			am.err = msg.err
+			am.screen = screenInput
+			return am, nil
+		}
+		am.torrent = msg.torrent
+		files := am.torrent.Files()
+		if len(files) == 1 {
+			am.file = files[0]
+			am.screen = screenBuffer
+		} else {
+			am.screen = screenSelect
+		}
+		return am, nil
 	}
+
+	return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
-func (m model) Init() tea.Cmd {
-	return nil
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (am appModel) updateSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up":
-			if m.cursor > 0 {
-				m.cursor--
+			if am.cursor > 0 {
+				am.cursor--
 			}
 		case "down":
-			if m.cursor < len(m.files)-1 {
-				m.cursor++
+			if am.cursor < len(am.torrent.Files())-1 {
+				am.cursor++
 			}
 		case "enter":
-			m.selector = m.cursor
-			return m, tea.Quit
-		case "q":
-			return m, tea.Quit
+			am.file = am.torrent.Files()[am.cursor]
+			am.screen = screenBuffer
 		}
 	}
 
-	return m, nil
+	return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
-func (m model) View() tea.View {
-	s := titleStyle.Render("Select the file:") + "\n"
-	for i, f := range m.files {
-		if m.cursor == i {
-			s += selectedStyle.Render("> "+f.DisplayPath()) + "\n"
-		} else {
-			s += normalStyle.Render("  "+f.DisplayPath()) + "\n"
-		}
+func (am appModel) updateBuffer(msg tea.Msg) (tea.Model, tea.Cmd) {
+	firstPiece := am.file.BeginPieceIndex()
+	lastPiece := am.file.EndPieceIndex()
+
+	am.file.SetPriority(torrent.PiecePriorityNormal)
+	k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+	for i := firstPiece; i < firstPiece+k; i++ {
+		am.torrent.Piece(i).SetPriority(torrent.PiecePriorityNow)
+	}
+	for i := lastPiece - 1; i >= lastPiece-k; i-- {
+		am.torrent.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
 
-	return tea.NewView(s)
-}
-
-type bufferModel struct {
-	spinner    spinner.Model
-	torrent    *torrent.Torrent
-	firstPiece int
-	lastPiece  int
-	k          int
-	done       bool
-	quit       bool
-}
-
-func newBufferModel(torrent *torrent.Torrent, firstPiece, lastPiece, k int) *bufferModel {
-	s := spinner.New()
-	s.Spinner = spinner.Ellipsis
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#CBA6F7"))
-	return &bufferModel{
-		spinner:    s,
-		torrent:    torrent,
-		firstPiece: firstPiece,
-		lastPiece:  lastPiece,
-		k:          k,
-	}
-}
-
-type tickMsg struct{}
-
-func (bm bufferModel) Init() tea.Cmd {
-	return tea.Batch(
-		bm.spinner.Tick,
-		tea.Tick(time.Second, func(t time.Time) tea.Msg {
-			return tickMsg{}
-		}),
-	)
-}
-
-func (bm bufferModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q":
-			bm.quit = true
-			return bm, tea.Quit
-		}
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		bm.spinner, cmd = bm.spinner.Update(msg)
-		return bm, cmd
+	switch msg.(type) {
 	case tickMsg:
 		firstDone := true
-		for i := bm.firstPiece; i < bm.firstPiece+bm.k; i++ {
-			if !bm.torrent.Piece(i).State().Complete {
+		for i := firstPiece; i < firstPiece+k; i++ {
+			if !am.torrent.Piece(i).State().Complete {
 				firstDone = false
 				break
 			}
 		}
 
 		lastDone := true
-		for i := bm.lastPiece - 1; i >= bm.lastPiece-bm.k; i-- {
-			if !bm.torrent.Piece(i).State().Complete {
+		for i := lastPiece - 1; i >= lastPiece-k; i-- {
+			if !am.torrent.Piece(i).State().Complete {
 				lastDone = false
 				break
 			}
 		}
 
 		if firstDone && lastDone {
-			bm.done = true
-			return bm, tea.Quit
+			am.done = true
+			return am, tea.Quit
 		}
-	}
 
-	return bm, tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+		return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
+			return tickMsg{}
+		})
+	}
+	return am, nil
 }
 
-func (bm bufferModel) View() tea.View {
-	var s string
-	if bm.done {
-		s = titleStyle.Render("Ready") + "\n"
-	} else {
-		s = selectedStyle.Render("Buffering") + bm.spinner.View() + "\n"
-	}
+type loadTorrentMsg struct {
+	torrent *torrent.Torrent
+	err     error
+}
 
+func loadTorrentCmd(c *torrent.Client, uri string) tea.Cmd {
+	return func() tea.Msg {
+		t, err := c.AddMagnet(uri)
+		if err != nil {
+			return loadTorrentMsg{err: err}
+		}
+		<-t.GotInfo()
+		return loadTorrentMsg{torrent: t}
+	}
+}
+
+func (am appModel) View() tea.View {
+	var s string
+	switch am.screen {
+	case screenInput:
+		s = am.input.View() + "\n"
+		if am.err != nil {
+			s += normalStyle.Render(am.err.Error()) + "\n"
+		}
+	case screenLoading:
+		s = selectedStyle.Render("Loading") + am.spinner.View() + "\n"
+	case screenSelect:
+		s = titleStyle.Render("Select your file:") + "\n"
+		for i, f := range am.torrent.Files() {
+			if i == am.cursor {
+				s += selectedStyle.Render("> "+f.DisplayPath()) + "\n"
+			} else {
+				s += normalStyle.Render("  "+f.DisplayPath()) + "\n"
+			}
+		}
+	case screenBuffer:
+		s = selectedStyle.Render("Buffering") + am.spinner.View() + "\n"
+	}
 	return tea.NewView(s)
 }

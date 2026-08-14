@@ -10,30 +10,15 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func main() {
 	noCache := flag.Bool("no-cache", false, "delete download data after playing")
 	flag.Parse()
-
-	args := flag.Args()
-	var uri string
-	if len(args) >= 1 {
-		uri = args[0]
-	} else {
-		uri = runInputScreen()
-		if uri == "" {
-			return
-		}
-	}
-
-	if !strings.HasPrefix(uri, "magnet:?") {
-		fmt.Println("invalid magnet link")
-		return
-	}
 
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -54,14 +39,17 @@ func main() {
 	}
 	defer c.Close()
 
-	t, err := addMagnet(c, uri)
+	app := tea.NewProgram(newAppModel(c))
+	result, err := app.Run()
 	if err != nil {
-		log.Fatalf("failed to add torrent: %v", err)
+		log.Fatalf("error running program")
 	}
-	torrentPaths, err := torrentPaths(dataDir, t.Name())
-	if err != nil {
-		log.Fatalf("failed to get torrent paths: %v", err)
+	am := result.(appModel)
+	if am.file == nil || !am.done {
+		return
 	}
+
+	torrentPaths := torrentPaths(dataDir, am.torrent.Name())
 
 	cleanup := func() {
 		c.Close()
@@ -78,12 +66,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	f, err := selectFile(t)
-	if err != nil {
-		log.Fatalf("failed to select file: %v", err)
-	}
-
-	reader := bufferFile(t, f)
+	reader := am.file.NewReader()
+	reader.SetReadahead(64 << 20)
 	if reader == nil {
 		cleanup()
 		return
@@ -96,7 +80,7 @@ func main() {
 		}
 	}
 
-	fmt.Println(selectedStyle.Render("playing: " + f.DisplayPath()))
+	fmt.Println(selectedStyle.Render("playing: " + am.file.DisplayPath()))
 
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -104,7 +88,7 @@ func main() {
 	}
 
 	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, f.DisplayPath(), time.Time{}, reader)
+		http.ServeContent(w, r, am.file.DisplayPath(), time.Time{}, reader)
 	})
 
 	go func() {
