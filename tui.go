@@ -49,14 +49,15 @@ type appModel struct {
 	client  *torrent.Client
 	file    *torrent.File
 
-	done bool
-	err  error
+	tickCount int
+	done      bool
+	err       error
 }
 
 func newAppModel(c *torrent.Client) *appModel {
 	ti := textinput.New()
 	ti.Focus()
-	ti.Prompt = " ▶ "
+	ti.Prompt = " ❯ "
 	ti.Placeholder = "magnet:?xt=..."
 	ti.CharLimit = 0
 	tiStyles := ti.Styles()
@@ -65,7 +66,7 @@ func newAppModel(c *torrent.Client) *appModel {
 	ti.SetStyles(tiStyles)
 
 	s := spinner.New()
-	s.Spinner = spinner.Ellipsis
+	s.Spinner = spinner.Line
 
 	return &appModel{
 		state:   stateInput,
@@ -92,6 +93,9 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return am, tea.Quit
 		}
 
+	case tickMsg:
+		am.tickCount++
+
 	case tea.WindowSizeMsg:
 		am.width = msg.Width
 		am.height = msg.Height
@@ -103,21 +107,26 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return am, cmd
 	}
 
+	var cmd tea.Cmd
 	switch am.state {
 	case stateInput:
-		return am.updateInput(msg)
+		am, cmd = am.updateInput(msg)
 	case stateLoading:
-		return am.updateLoading(msg)
+		am, cmd = am.updateLoading(msg)
 	case stateSelect:
-		return am.updateSelect(msg)
+		am, cmd = am.updateSelect(msg)
 	case stateBuffer:
-		return am.updateBuffer(msg)
+		am, cmd = am.updateBuffer(msg)
 	}
 
-	return am, nil
+	tickCmd := tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
+
+	return am, tea.Batch(cmd, tickCmd)
 }
 
-func (am appModel) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		if key.String() == "enter" {
 			am.err = nil
@@ -136,7 +145,7 @@ func (am appModel) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return am, cmd
 }
 
-func (am appModel) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case loadTorrentMsg:
 		if msg.err != nil {
@@ -148,6 +157,7 @@ func (am appModel) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
 		files := am.torrent.Files()
 		if len(files) == 1 {
 			am.file = files[0]
+			setFilePriority(am.torrent, am.file)
 			am.state = stateBuffer
 		} else {
 			am.state = stateSelect
@@ -155,12 +165,10 @@ func (am appModel) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return am, nil
 	}
 
-	return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+	return am, nil
 }
 
-func (am appModel) updateSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -174,30 +182,21 @@ func (am appModel) updateSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			am.file = am.torrent.Files()[am.cursor]
+			setFilePriority(am.torrent, am.file)
 			am.state = stateBuffer
 		}
 	}
 
-	return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return tickMsg{}
-	})
+	return am, nil
 }
 
-func (am appModel) updateBuffer(msg tea.Msg) (tea.Model, tea.Cmd) {
-	firstPiece := am.file.BeginPieceIndex()
-	lastPiece := am.file.EndPieceIndex()
-
-	am.file.SetPriority(torrent.PiecePriorityNormal)
-	k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
-	for i := firstPiece; i < firstPiece+k; i++ {
-		am.torrent.Piece(i).SetPriority(torrent.PiecePriorityNow)
-	}
-	for i := lastPiece - 1; i >= lastPiece-k; i-- {
-		am.torrent.Piece(i).SetPriority(torrent.PiecePriorityNow)
-	}
-
+func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg.(type) {
 	case tickMsg:
+		firstPiece := am.file.BeginPieceIndex()
+		lastPiece := am.file.EndPieceIndex()
+		k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+
 		firstDone := true
 		for i := firstPiece; i < firstPiece+k; i++ {
 			if !am.torrent.Piece(i).State().Complete {
@@ -219,11 +218,24 @@ func (am appModel) updateBuffer(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return am, tea.Quit
 		}
 
-		return am, tea.Tick(time.Second, func(t time.Time) tea.Msg {
-			return tickMsg{}
-		})
+		return am, nil
 	}
+
 	return am, nil
+}
+
+func setFilePriority(t *torrent.Torrent, f *torrent.File) {
+	firstPiece := f.BeginPieceIndex()
+	lastPiece := f.EndPieceIndex()
+
+	f.SetPriority(torrent.PiecePriorityNormal)
+	k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+	for i := firstPiece; i < firstPiece+k; i++ {
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
+	}
+	for i := lastPiece - 1; i >= lastPiece-k; i-- {
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
+	}
 }
 
 type loadTorrentMsg struct {
@@ -248,6 +260,12 @@ func (am appModel) View() tea.View {
 	header := lipgloss.JoinHorizontal(lipgloss.Bottom, logo, "  ", title)
 
 	inputWidth := am.width - 6
+	if am.state == stateLoading {
+		am.input.Prompt = " " + am.spinner.View() + " "
+	} else {
+		am.input.Prompt = " ❯ "
+	}
+
 	var input string
 	if am.err != nil {
 		input = errBorderStyle.Width(inputWidth).Render(am.input.View())
@@ -259,19 +277,83 @@ func (am appModel) View() tea.View {
 
 	var errorMsg string
 	if am.err != nil {
-		errorMsg = errStyle.Render(am.err.Error())
+		errorMsg = errStyle.Render("! " + strings.ToTitle(am.err.Error()))
 	}
 
-	leftWitdth := (am.width - 6) / 2
+	leftWitdth := (am.width - 6) * 2 / 3
 	rightWidth := am.width - leftWitdth - 6
-	panelHeight := am.height - 7
+	panelHeight := am.height - 9
 
-	leftPanel := borderStyle.Width(leftWitdth).Height(panelHeight).Render()
-	rightPanel := borderStyle.Width(rightWidth).Height(panelHeight).Render()
+	var leftPanel string
+	if am.torrent != nil {
+		leftPanel = selectView(am.torrent.Files(), am.cursor, leftWitdth-6, am.tickCount, am.state)
+	}
+	if am.state == stateSelect {
+		leftPanel = activeBorderStyle.Width(leftWitdth).Height(panelHeight).Render(leftPanel)
+	} else {
+		leftPanel = borderStyle.Width(leftWitdth).Height(panelHeight).Render(mutedStyle.Render(leftPanel))
+	}
+
+	var rightPanel string
+	if errorMsg != "" {
+		rightPanel = errBorderStyle.Width(rightWidth).Height(panelHeight).Render(errorMsg)
+	} else {
+		switch am.state {
+		case stateInput:
+			rightPanel = mutedStyle.Render("Paste your magnet link and press Enter")
+		case stateLoading:
+			rightPanel = selectedStyle.Render("Fetching Metadata ") + am.spinner.View()
+		case stateSelect:
+			rightPanel = mutedStyle.Render("Press Enter to begin stream...")
+		case stateBuffer:
+			rightPanel = selectedStyle.Render("Buffering ") + am.spinner.View()
+		}
+		rightPanel = borderStyle.Width(rightWidth).Height(panelHeight).Render(rightPanel)
+	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+	footer := mutedStyle.Render(" ↑/↓ Navigate • Enter Select • Esc/Ctrl+C Quit")
 
-	v := tea.NewView(borderStyle.Width(am.width - 2).Height(am.height - 2).Render(lipgloss.JoinVertical(lipgloss.Left, header, input, errorMsg, body)))
+	v := tea.NewView(borderStyle.Width(am.width - 2).Height(am.height - 2).Render(lipgloss.JoinVertical(lipgloss.Left, header, input, body, footer)))
 	v.AltScreen = true
 	return v
+}
+
+func selectView(files []*torrent.File, cursor, maxLen, step int, state state) string {
+	var ret string
+	for i, f := range files {
+		name := f.DisplayPath()
+		if cursor == i {
+			if state == stateSelect {
+				ret += selectedStyle.Render("▶ "+marquee(name, maxLen, step)) + "\n"
+			} else {
+				ret += mutedStyle.Render("▶ "+marquee(name, maxLen, step)) + "\n"
+			}
+		} else {
+			if state == stateSelect {
+				ret += normalStyle.Render("  "+truncate(name, maxLen)) + "\n"
+			} else {
+				ret += mutedStyle.Render("  "+truncate(name, maxLen)) + "\n"
+			}
+		}
+	}
+
+	return ret
+}
+
+func truncate(s string, maxLen int) string {
+	if maxLen > 3 && len(s) > maxLen {
+		return s[:maxLen-3] + "..."
+	}
+	return s
+}
+
+func marquee(s string, maxLen, step int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+
+	padded := s + "   " + s
+	offset := step % (len(s) + 3)
+	return padded[offset : offset+maxLen]
 }
