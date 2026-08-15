@@ -44,14 +44,16 @@ type appModel struct {
 	input   textinput.Model
 	spinner spinner.Model
 
-	cursor  int
+	cursor       int
+	scrollOffset int
+	tickCount    int
+
 	torrent *torrent.Torrent
 	client  *torrent.Client
 	file    *torrent.File
 
-	tickCount int
-	done      bool
-	err       error
+	done bool
+	err  error
 }
 
 func newAppModel(c *torrent.Client) *appModel {
@@ -175,10 +177,17 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 		case "up":
 			if am.cursor > 0 {
 				am.cursor--
+				if am.cursor < am.scrollOffset {
+					am.scrollOffset = am.cursor
+				}
 			}
 		case "down":
 			if am.cursor < len(am.torrent.Files())-1 {
 				am.cursor++
+				visibleRows := am.height - 12
+				if am.cursor >= am.scrollOffset+visibleRows {
+					am.scrollOffset = am.cursor - visibleRows + 1
+				}
 			}
 		case "enter":
 			am.file = am.torrent.Files()[am.cursor]
@@ -286,7 +295,7 @@ func (am appModel) View() tea.View {
 
 	var leftPanel string
 	if am.torrent != nil {
-		leftPanel = selectView(am.torrent.Files(), am.cursor, leftWitdth-6, am.tickCount, am.state)
+		leftPanel = selectView(am.torrent.Files(), am.cursor, leftWitdth-6, am.tickCount, panelHeight, am.scrollOffset, am.state)
 	}
 	if am.state == stateSelect {
 		leftPanel = activeBorderStyle.Width(leftWitdth).Height(panelHeight).Render(leftPanel)
@@ -319,11 +328,22 @@ func (am appModel) View() tea.View {
 	return v
 }
 
-func selectView(files []*torrent.File, cursor, maxLen, step int, state state) string {
+func selectView(files []*torrent.File, cursor, maxLen, step, panelHeight, scrollOffset int, state state) string {
+	visibleRows := panelHeight - 3
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	start := scrollOffset
+	end := start + visibleRows
+	if end > len(files) {
+		end = len(files)
+	}
+
 	var ret string
-	for i, f := range files {
+	for i, f := range files[start:end] {
 		name := f.DisplayPath()
-		if cursor == i {
+		if cursor == i+start {
 			if state == stateSelect {
 				ret += selectedStyle.Render("▶ "+marquee(name, maxLen, step)) + "\n"
 			} else {
