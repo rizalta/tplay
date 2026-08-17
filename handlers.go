@@ -13,6 +13,8 @@ import (
 	"github.com/anacrolix/torrent"
 )
 
+const bufferPercent = 2
+
 func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		if key.String() == "enter" {
@@ -84,6 +86,8 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 	return am, nil
 }
 
+type mpvStoppedMsg struct{}
+
 func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg.(type) {
 	case tickMsg:
@@ -123,11 +127,12 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			reader := am.file.NewReader()
 			reader.SetReadahead(62 << 20)
 
-			port, err := serveToPort(am.file.DisplayPath(), reader)
+			ln, err := serveToPort(am.file.DisplayPath(), reader)
 			if err != nil {
 				am.err = err
 				return am, nil
 			}
+			port := ln.Addr().(*net.TCPAddr).Port
 
 			cmd := exec.Command("mpv", fmt.Sprintf("http://localhost:%d/stream", port))
 			if err := cmd.Start(); err != nil {
@@ -136,8 +141,24 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 
 			am.done = true
-			return am, nil
+			return am, func() tea.Msg {
+				_ = cmd.Wait()
+				_ = reader.Close()
+				_ = ln.Close()
+
+				return mpvStoppedMsg{}
+			}
 		}
+
+		return am, nil
+
+	case mpvStoppedMsg:
+		if am.file != nil {
+			am.file.SetPriority(torrent.PiecePriorityNone)
+		}
+		am.done = false
+		am.downloadSpeed = 0
+		am.state = stateSelect
 
 		return am, nil
 	}
@@ -175,12 +196,11 @@ func loadTorrentCmd(c *torrent.Client, uri string) tea.Cmd {
 	}
 }
 
-func serveToPort(name string, reader io.ReadSeeker) (int, error) {
+func serveToPort(name string, reader io.ReadSeeker) (net.Listener, error) {
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
@@ -191,5 +211,5 @@ func serveToPort(name string, reader io.ReadSeeker) (int, error) {
 		_ = http.Serve(ln, mux)
 	}()
 
-	return port, nil
+	return ln, nil
 }

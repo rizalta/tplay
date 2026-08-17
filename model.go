@@ -18,8 +18,6 @@ const (
 	stateBuffer
 )
 
-const bufferPercent = 2
-
 type appModel struct {
 	width  int
 	height int
