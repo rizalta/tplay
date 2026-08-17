@@ -2,12 +2,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -79,30 +75,6 @@ func main() {
 			log.Printf("failed to change mtime: %v", err)
 		}
 	}
-
-	fmt.Println(selectedStyle.Render("playing: " + am.file.DisplayPath()))
-
-	ln, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, am.file.DisplayPath(), time.Time{}, reader)
-	})
-
-	go func() {
-		if err := http.Serve(ln, nil); err != nil {
-			log.Fatalf("error serving file: %v", err)
-		}
-	}()
-
-	port := ln.Addr().(*net.TCPAddr).Port
-
-	cmd := exec.Command("mpv", fmt.Sprintf("http://localhost:%d/stream", port))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	_ = cmd.Run()
 
 	if *noCache {
 		for _, tp := range torrentPaths {
