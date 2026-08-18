@@ -78,7 +78,7 @@ func (am appModel) View() tea.View {
 	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	footer := mutedStyle.Render(" ↑/↓ Navigate • Enter Select • Esc/Ctrl+C Quit")
+	footer := mutedStyle.Render(" ↑/↓ Navigate • Enter Select • Esc Back • Ctrl+C Quit")
 
 	v := tea.NewView(borderStyle.Width(am.width - 2).Height(am.height - 2).Render(lipgloss.JoinVertical(lipgloss.Left, header, input, body, footer)))
 	v.AltScreen = true

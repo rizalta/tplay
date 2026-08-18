@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -24,8 +26,12 @@ func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 				am.err = fmt.Errorf("invalid magnet link")
 				return am, nil
 			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			am.cancelLoad = cancel
+
 			am.state = stateLoading
-			return am, loadTorrentCmd(am.client, uri)
+			return am, loadTorrentCmd(ctx, am.client, uri)
 		}
 	}
 
@@ -36,8 +42,21 @@ func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 
 func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "esc" {
+			if am.cancelLoad != nil {
+				am.cancelLoad()
+				am.cancelLoad = nil
+			}
+
+			am.state = stateInput
+			return am, nil
+		}
 	case loadTorrentMsg:
 		if msg.err != nil {
+			if errors.Is(msg.err, context.Canceled) {
+				return am, nil
+			}
 			am.err = msg.err
 			am.state = stateInput
 			return am, nil
@@ -80,6 +99,13 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 			am.file = am.torrent.Files()[am.cursor]
 			setFilePriority(am.torrent, am.file)
 			am.state = stateBuffer
+
+		case "esc":
+			am.torrent = nil
+			am.cursor = 0
+			am.scrollOffset = 0
+			am.err = nil
+			am.state = stateInput
 		}
 	}
 
@@ -89,7 +115,13 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 type mpvStoppedMsg struct{}
 
 func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			am.state = stateSelect
+			return am, nil
+		}
 	case tickMsg:
 		if am.tickCount%5 != 0 {
 			return am, nil
@@ -134,15 +166,15 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 			port := ln.Addr().(*net.TCPAddr).Port
 
-			cmd := exec.Command("mpv", fmt.Sprintf("http://localhost:%d/stream", port))
-			if err := cmd.Start(); err != nil {
+			playerCmd := exec.Command("mpv", fmt.Sprintf("http://localhost:%d/stream", port))
+			if err := playerCmd.Start(); err != nil {
 				am.err = err
 				return am, nil
 			}
 
 			am.done = true
 			return am, func() tea.Msg {
-				_ = cmd.Wait()
+				_ = playerCmd.Wait()
 				_ = reader.Close()
 				_ = ln.Close()
 
@@ -185,14 +217,19 @@ type loadTorrentMsg struct {
 	err     error
 }
 
-func loadTorrentCmd(c *torrent.Client, uri string) tea.Cmd {
+func loadTorrentCmd(ctx context.Context, c *torrent.Client, uri string) tea.Cmd {
 	return func() tea.Msg {
 		t, err := c.AddMagnet(uri)
 		if err != nil {
 			return loadTorrentMsg{err: err}
 		}
-		<-t.GotInfo()
-		return loadTorrentMsg{torrent: t}
+		select {
+		case <-t.GotInfo():
+			return loadTorrentMsg{torrent: t}
+		case <-ctx.Done():
+			t.Drop()
+			return loadTorrentMsg{err: context.Canceled}
+		}
 	}
 }
 

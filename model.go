@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -36,8 +37,9 @@ type appModel struct {
 	client  *torrent.Client
 	file    *torrent.File
 
-	done bool
-	err  error
+	cancelLoad context.CancelFunc
+	done       bool
+	err        error
 }
 
 func newAppModel(c *torrent.Client) *appModel {
@@ -78,7 +80,7 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "ctrl+c":
+		case "ctrl+c":
 			return am, tea.Quit
 		}
 
