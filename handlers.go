@@ -66,7 +66,7 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 			return am, nil
 		}
 		am.torrent = msg.torrent
-		files := am.torrent.Files()
+		files := am.visibleFiles()
 		if len(files) == 1 {
 			am.file = files[0]
 			setFilePriority(am.torrent, am.file)
@@ -92,7 +92,7 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 				}
 			}
 		case "down":
-			if am.cursor < len(am.torrent.Files())-1 {
+			if am.cursor < len(am.visibleFiles())-1 {
 				am.cursor++
 				visibleRows := am.height - 12
 				if am.cursor >= am.scrollOffset+visibleRows {
@@ -100,7 +100,7 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 				}
 			}
 		case "enter":
-			am.file = am.torrent.Files()[am.cursor]
+			am.file = am.visibleFiles()[am.cursor]
 			setFilePriority(am.torrent, am.file)
 			am.state = stateBuffer
 

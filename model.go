@@ -23,9 +23,10 @@ const (
 const bufferPercent = 2
 
 type appModel struct {
-	width  int
-	height int
-	state  state
+	width     int
+	height    int
+	state     state
+	mediaOnly bool
 
 	input   textinput.Model
 	spinner spinner.Model
@@ -62,11 +63,12 @@ func newAppModel(c *torrent.Client, dataDir string) *appModel {
 	s.Spinner = spinner.Line
 
 	return &appModel{
-		state:   stateInput,
-		input:   ti,
-		spinner: s,
-		dataDir: dataDir,
-		client:  c,
+		state:     stateInput,
+		mediaOnly: true,
+		input:     ti,
+		spinner:   s,
+		dataDir:   dataDir,
+		client:    c,
 	}
 }
 
@@ -88,6 +90,12 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return am, tea.Quit
+
+		case "tab":
+			am.mediaOnly = !am.mediaOnly
+			am.cursor = 0
+			am.scrollOffset = 0
+			return am, nil
 		}
 
 	case tickMsg:
@@ -123,4 +131,12 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return am, cmd
+}
+
+func (am appModel) visibleFiles() []*torrent.File {
+	if !am.mediaOnly {
+		return am.torrent.Files()
+	}
+
+	return mediaFiles(am.torrent.Files())
 }

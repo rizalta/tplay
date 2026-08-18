@@ -22,6 +22,37 @@ var (
 	errBorderStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#F38BA8"))
 )
 
+const (
+	escIdx         = 2
+	mediaToggleIdx = 3
+)
+
+var keys = []struct {
+	key    string
+	action string
+}{
+	{
+		key:    "↑/↓",
+		action: "Navigate",
+	},
+	{
+		key:    "Enter",
+		action: "Select",
+	},
+	{
+		key:    "Esc",
+		action: "",
+	},
+	{
+		key:    "Tab",
+		action: "",
+	},
+	{
+		key:    "Ctrl+C",
+		action: "Quit",
+	},
+}
+
 func (am appModel) View() tea.View {
 	logo := logoStyle.Render("▀█▀ █▀█ █   ▄▀█ █▄█\n █  █▀▀ █▄▄ █▀█  █ ")
 	title := headerStyle.Render("Play ur torrents")
@@ -78,7 +109,7 @@ func (am appModel) View() tea.View {
 	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	footer := mutedStyle.Render(" ↑/↓ Navigate • Enter Select • Esc Back • Ctrl+C Quit")
+	footer := am.footerView()
 
 	v := tea.NewView(borderStyle.Width(am.width - 2).Height(am.height - 2).Render(lipgloss.JoinVertical(lipgloss.Left, header, input, body, footer)))
 	v.AltScreen = true
@@ -92,7 +123,7 @@ func (am appModel) selectView(width, height int) string {
 	}
 	maxLen := width - 6
 
-	files := am.torrent.Files()
+	files := am.visibleFiles()
 	start := am.scrollOffset
 	end := start + visibleRows
 	if end > len(files) {
@@ -138,7 +169,7 @@ func (am appModel) statsView(width int) string {
 		formatLine("Info Hash", am.torrent.InfoHash().HexString(), doneStyle, mutedStyle, width),
 	)
 
-	f := am.torrent.Files()[am.cursor]
+	f := am.visibleFiles()[am.cursor]
 	filename := filepath.Base(f.DisplayPath())
 	fileDir := filepath.Dir(f.DisplayPath())
 	fileExt := filepath.Ext(f.DisplayPath())
@@ -174,6 +205,28 @@ func (am appModel) statsView(width int) string {
 		torrentInfo, "",
 		fileInfo, "",
 		swarmStats)
+}
+
+func (am appModel) footerView() string {
+	escStr := "Back"
+	if am.state == stateInput {
+		escStr = "Clear"
+	}
+	keys[escIdx].action = escStr
+
+	mediaToggleStr := "Media Only"
+	if am.mediaOnly {
+		mediaToggleStr = "All Files"
+	}
+	keys[mediaToggleIdx].action = mediaToggleStr
+
+	footer := "  "
+	for _, k := range keys {
+		line := lipgloss.JoinHorizontal(lipgloss.Center, normalStyle.Render(k.key), " ", mutedStyle.Render(k.action))
+		footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", line)
+	}
+
+	return footer
 }
 
 func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int) string {

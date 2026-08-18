@@ -1,6 +1,19 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/anacrolix/torrent"
+)
+
+var mediaExtensions = map[string]struct{}{
+	".mkv": {}, ".mp4": {}, ".avi": {},
+	".webm": {}, ".mov": {}, ".m4v": {},
+	".mp3": {}, ".flac": {}, ".m4a": {},
+	".aac": {}, ".ogg": {},
+}
 
 func truncate(s string, maxLen int) string {
 	runes := []rune(s)
@@ -37,4 +50,16 @@ func humanSize(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func mediaFiles(files []*torrent.File) []*torrent.File {
+	var ret []*torrent.File
+	for _, f := range files {
+		ext := strings.ToLower(filepath.Ext(f.DisplayPath()))
+		if _, ok := mediaExtensions[ext]; ok {
+			ret = append(ret, f)
+		}
+	}
+
+	return ret
 }
