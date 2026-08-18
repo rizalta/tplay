@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,4 +60,22 @@ func torrentPaths(dataDir, name string) []string {
 	matches, _ := filepath.Glob(torrentPath + "*")
 
 	return matches
+}
+
+func serveToPort(name string, reader io.ReadSeeker) (net.Listener, error) {
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return nil, err
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, name, time.Time{}, reader)
+	})
+
+	go func() {
+		_ = http.Serve(ln, mux)
+	}()
+
+	return ln, nil
 }

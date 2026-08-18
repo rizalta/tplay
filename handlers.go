@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -14,8 +13,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
 )
-
-const bufferPercent = 2
 
 func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
@@ -209,6 +206,14 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 		return am, nil
 
 	case mpvStoppedMsg:
+		if am.torrent != nil {
+			torrentPaths := torrentPaths(am.dataDir, am.torrent.Name())
+			now := time.Now()
+			for _, tp := range torrentPaths {
+				_ = os.Chtimes(tp, now, now)
+			}
+		}
+
 		if am.file != nil {
 			am.file.SetPriority(torrent.PiecePriorityNone)
 		}
@@ -255,22 +260,4 @@ func loadTorrentCmd(ctx context.Context, c *torrent.Client, uri string) tea.Cmd 
 			return loadTorrentMsg{err: context.Canceled}
 		}
 	}
-}
-
-func serveToPort(name string, reader io.ReadSeeker) (net.Listener, error) {
-	ln, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, err
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeContent(w, r, name, time.Time{}, reader)
-	})
-
-	go func() {
-		_ = http.Serve(ln, mux)
-	}()
-
-	return ln, nil
 }

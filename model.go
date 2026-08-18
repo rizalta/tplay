@@ -20,6 +20,8 @@ const (
 	stateBuffer
 )
 
+const bufferPercent = 2
+
 type appModel struct {
 	width  int
 	height int
@@ -34,6 +36,7 @@ type appModel struct {
 	downloadSpeed int64
 	prevBytes     int64
 
+	dataDir   string
 	torrent   *torrent.Torrent
 	client    *torrent.Client
 	file      *torrent.File
@@ -44,7 +47,7 @@ type appModel struct {
 	err        error
 }
 
-func newAppModel(c *torrent.Client) *appModel {
+func newAppModel(c *torrent.Client, dataDir string) *appModel {
 	ti := textinput.New()
 	ti.Focus()
 	ti.Prompt = " ❯ "
@@ -62,6 +65,7 @@ func newAppModel(c *torrent.Client) *appModel {
 		state:   stateInput,
 		input:   ti,
 		spinner: s,
+		dataDir: dataDir,
 		client:  c,
 	}
 }
