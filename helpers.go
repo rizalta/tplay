@@ -3,20 +3,25 @@ package main
 import "fmt"
 
 func truncate(s string, maxLen int) string {
-	if maxLen > 3 && len(s) > maxLen {
-		return s[:maxLen-3] + "..."
+	runes := []rune(s)
+	if maxLen > 3 && len(runes) > maxLen {
+		return string(runes[:maxLen-3]) + "..."
 	}
 	return s
 }
 
 func marquee(s string, maxLen, step int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+
+	if len(runes) <= maxLen {
 		return s
 	}
 
-	padded := s + "   " + s
-	offset := step % (len(s) + 3)
-	return padded[offset : offset+maxLen]
+	padded := append(runes, []rune("   ")...)
+	padded = append(padded, runes...)
+
+	offset := step % (len(runes) + 3)
+	return string(padded[offset : offset+maxLen])
 }
 
 func humanSize(bytes int64) string {

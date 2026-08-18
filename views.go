@@ -48,18 +48,18 @@ func (am appModel) View() tea.View {
 		errorMsg = errStyle.Render("! " + strings.ToTitle(am.err.Error()))
 	}
 
-	leftWitdth := (am.width - 6) * 2 / 3
-	rightWidth := am.width - leftWitdth - 6
+	leftWidth := (am.width - 6) * 2 / 3
+	rightWidth := am.width - leftWidth - 6
 	panelHeight := am.height - 9
 
 	var leftPanel string
 	if am.torrent != nil {
-		leftPanel = am.selectView()
+		leftPanel = am.selectView(leftWidth, panelHeight)
 	}
 	if am.state == stateSelect {
-		leftPanel = activeBorderStyle.Width(leftWitdth).Height(panelHeight).Render(leftPanel)
+		leftPanel = activeBorderStyle.Width(leftWidth).Height(panelHeight).Render(leftPanel)
 	} else {
-		leftPanel = borderStyle.Width(leftWitdth).Height(panelHeight).Render(mutedStyle.Render(leftPanel))
+		leftPanel = borderStyle.Width(leftWidth).Height(panelHeight).Render(mutedStyle.Render(leftPanel))
 	}
 
 	var rightPanel string
@@ -72,7 +72,7 @@ func (am appModel) View() tea.View {
 		case stateLoading:
 			rightPanel = selectedStyle.Render("Fetching Metadata ") + am.spinner.View()
 		case stateSelect, stateBuffer:
-			rightPanel = am.statsView()
+			rightPanel = am.statsView(rightWidth)
 		}
 		rightPanel = borderStyle.Width(rightWidth).Height(panelHeight).Render(rightPanel)
 	}
@@ -85,15 +85,12 @@ func (am appModel) View() tea.View {
 	return v
 }
 
-func (am appModel) selectView() string {
-	panelHeight := am.height - 6
-	leftWitdth := (am.width - 6) * 2 / 3
-
-	visibleRows := panelHeight - 6
+func (am appModel) selectView(width, height int) string {
+	visibleRows := height - 3
 	if visibleRows < 1 {
 		visibleRows = 1
 	}
-	maxLen := leftWitdth - 6
+	maxLen := width - 6
 
 	files := am.torrent.Files()
 	start := am.scrollOffset
@@ -123,52 +120,70 @@ func (am appModel) selectView() string {
 	return ret
 }
 
-func (am appModel) statsView() string {
-	var status string
+func (am appModel) statsView(width int) string {
+	status := headerStyle.Render("Status: ")
 	if am.done {
-		status = doneStyle.Render("Playing on MPV")
+		status += doneStyle.Render("Playing on MPV")
 	} else if am.state == stateBuffer {
-		status = selectedStyle.Render("Buffering " + am.spinner.View())
+		status += selectedStyle.Render("Buffering " + am.spinner.View())
 	} else {
-		status = normalStyle.Render("Idle")
+		status += normalStyle.Render("Idle")
 	}
 	status += "\n"
 
-	torrentInfo := headerStyle.Underline(true).Render("TORRENT INFO") + "\n" +
-		doneStyle.Render("Name: ") +
-		selectedStyle.Render(am.torrent.Name()) + "\n" +
-		doneStyle.Render("Total Size: ") +
-		normalStyle.Render(humanSize(am.torrent.Length())) + "\n" +
-		doneStyle.Render("Info Hash: ") +
-		mutedStyle.Render(am.torrent.InfoHash().HexString()[:8]) + "\n"
+	torrentInfo := lipgloss.JoinVertical(lipgloss.Left,
+		headerStyle.Underline(true).Render("TORRENT INFO"),
+		formatLine("Name", am.torrent.Name(), doneStyle, selectedStyle, width),
+		formatLine("Total Size", humanSize(am.torrent.Length()), doneStyle, normalStyle, width),
+		formatLine("Info Hash", am.torrent.InfoHash().HexString(), doneStyle, mutedStyle, width),
+	)
 
 	f := am.torrent.Files()[am.cursor]
 	filename := filepath.Base(f.DisplayPath())
+	fileDir := filepath.Dir(f.DisplayPath())
 	fileExt := filepath.Ext(f.DisplayPath())
 	if fileExt != "" {
 		fileExt = fileExt[1:]
 	}
+	fileSize := f.Length()
 
-	fileInfo := headerStyle.Underline(true).Render("FILE INFO") + "\n" +
-		doneStyle.Render("Name: ") +
-		selectedStyle.Render(filename) + "\n" +
-		doneStyle.Render("Path: ") +
-		normalStyle.Render(filepath.Dir(f.DisplayPath())) + "\n" +
-		doneStyle.Render("Size: ") +
-		normalStyle.Render(humanSize(f.Length())) + "\n" +
-		doneStyle.Render("Type: ") +
-		normalStyle.Render(fileExt) + "\n"
+	fileInfo := lipgloss.JoinVertical(lipgloss.Left,
+		headerStyle.Underline(true).Render("FILE INFO"),
+		formatLine("Name", filename, doneStyle, selectedStyle, width),
+		formatLine("Directory", fileDir, doneStyle, normalStyle, width),
+		formatLine("Size", humanSize(fileSize), doneStyle, normalStyle, width),
+		formatLine("Type", fileExt, doneStyle, normalStyle, width),
+	)
+
+	activePeersStr := fmt.Sprintf("%d", am.torrent.Stats().ActivePeers)
+	swarmSizeStr := fmt.Sprintf("%d", am.torrent.Stats().TotalPeers)
+	downloadSpeedStr := fmt.Sprintf("%s/s", humanSize(am.downloadSpeed))
 
 	var swarmStats string
 	if am.state == stateBuffer {
-		swarmStats = headerStyle.Underline(true).Render("SWARM INFO") + "\n" +
-			doneStyle.Render("Active Peers: ") +
-			selectedStyle.Render(fmt.Sprintf("%d", am.torrent.Stats().ActivePeers)) + "\n" +
-			doneStyle.Render("Swarm size: ") +
-			normalStyle.Render(fmt.Sprintf("%d", am.torrent.Stats().TotalPeers)) + "\n" +
-			doneStyle.Render("DL Speed: ") +
-			normalStyle.Render(fmt.Sprintf("%s/s", humanSize(am.downloadSpeed))) + "\n"
+		swarmStats = lipgloss.JoinVertical(lipgloss.Left,
+			headerStyle.Underline(true).Render("SWARM INFO"),
+			formatLine("Active Peers", activePeersStr, doneStyle, selectedStyle, width),
+			formatLine("Swarm Size", swarmSizeStr, doneStyle, normalStyle, width),
+			formatLine("DL Speed", downloadSpeedStr, doneStyle, normalStyle, width),
+		)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, status, torrentInfo, fileInfo, swarmStats)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		status,
+		torrentInfo, "",
+		fileInfo, "",
+		swarmStats)
+}
+
+func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int) string {
+	labelWidth := min(width, 12)
+	valWidth := width - labelWidth - 6
+
+	wrappedVal := lipgloss.Wrap(val, width, " ")
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		labelStyle.Width(labelWidth).Render(label),
+		": ",
+		valStyle.Width(valWidth).Render(wrappedVal),
+	)
 }
