@@ -19,7 +19,8 @@ const bufferPercent = 2
 
 func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
-		if key.String() == "enter" {
+		switch key.String() {
+		case "enter":
 			am.err = nil
 			uri := am.input.Value()
 			if !strings.HasPrefix(uri, "magnet:?xt=") {
@@ -32,6 +33,12 @@ func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 
 			am.state = stateLoading
 			return am, loadTorrentCmd(ctx, am.client, uri)
+
+		case "esc":
+			am.err = nil
+			am.input.SetValue("")
+
+			return am, nil
 		}
 	}
 
@@ -119,7 +126,21 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
+			if am.playerCmd != nil && am.playerCmd.Process != nil {
+				if err := am.playerCmd.Process.Kill(); err != nil {
+					am.err = err
+				}
+			}
+
+			if am.file != nil {
+				am.file.SetPriority(torrent.PiecePriorityNone)
+			}
+
+			am.done = false
+			am.file = nil
+			am.downloadSpeed = 0
 			am.state = stateSelect
+
 			return am, nil
 		}
 	case tickMsg:
@@ -128,7 +149,9 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 		}
 
 		curr := am.torrent.BytesCompleted()
-		am.downloadSpeed = curr - am.prevBytes
+		if curr >= am.prevBytes {
+			am.downloadSpeed = curr - am.prevBytes
+		}
 		am.prevBytes = curr
 
 		if am.done {
@@ -171,6 +194,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 				am.err = err
 				return am, nil
 			}
+			am.playerCmd = playerCmd
 
 			am.done = true
 			return am, func() tea.Msg {

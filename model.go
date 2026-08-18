@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os/exec"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -33,9 +34,10 @@ type appModel struct {
 	downloadSpeed int64
 	prevBytes     int64
 
-	torrent *torrent.Torrent
-	client  *torrent.Client
-	file    *torrent.File
+	torrent   *torrent.Torrent
+	client    *torrent.Client
+	file      *torrent.File
+	playerCmd *exec.Cmd
 
 	cancelLoad context.CancelFunc
 	done       bool
