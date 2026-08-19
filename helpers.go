@@ -63,3 +63,12 @@ func mediaFiles(files []*torrent.File) []*torrent.File {
 
 	return ret
 }
+
+func progressBar(percent float64, width int) string {
+	filled := int(percent / 100 * float64(width))
+	if filled > width {
+		filled = width
+	}
+
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+}

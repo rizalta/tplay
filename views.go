@@ -17,7 +17,7 @@ var (
 	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6ADC8"))
 	borderStyle       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#585B70"))
 	activeBorderStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#CBA6F7"))
-	doneStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1"))
+	infoStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1"))
 	errStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("#F38BA8"))
 	errBorderStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#F38BA8"))
 )
@@ -154,7 +154,7 @@ func (am appModel) selectView(width, height int) string {
 func (am appModel) statsView(width int) string {
 	status := headerStyle.Render("Status: ")
 	if am.done {
-		status += doneStyle.Render("Playing on MPV")
+		status += infoStyle.Render("Playing on MPV")
 	} else if am.state == stateBuffer {
 		status += selectedStyle.Render("Buffering " + am.spinner.View())
 	} else {
@@ -164,9 +164,9 @@ func (am appModel) statsView(width int) string {
 
 	torrentInfo := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Underline(true).Render("TORRENT INFO"),
-		formatLine("Name", am.torrent.Name(), doneStyle, selectedStyle, width),
-		formatLine("Total Size", humanSize(am.torrent.Length()), doneStyle, normalStyle, width),
-		formatLine("Info Hash", am.torrent.InfoHash().HexString(), doneStyle, mutedStyle, width),
+		formatLine("Name", am.torrent.Name(), infoStyle, selectedStyle, width),
+		formatLine("Total Size", humanSize(am.torrent.Length()), infoStyle, normalStyle, width),
+		formatLine("Info Hash", am.torrent.InfoHash().HexString(), infoStyle, mutedStyle, width),
 	)
 
 	f := am.visibleFiles()[am.cursor]
@@ -180,23 +180,46 @@ func (am appModel) statsView(width int) string {
 
 	fileInfo := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Underline(true).Render("FILE INFO"),
-		formatLine("Name", filename, doneStyle, selectedStyle, width),
-		formatLine("Directory", fileDir, doneStyle, normalStyle, width),
-		formatLine("Size", humanSize(fileSize), doneStyle, normalStyle, width),
-		formatLine("Type", fileExt, doneStyle, normalStyle, width),
+		formatLine("Name", filename, infoStyle, selectedStyle, width),
+		formatLine("Directory", fileDir, infoStyle, normalStyle, width),
+		formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width),
+		formatLine("Type", fileExt, infoStyle, normalStyle, width),
 	)
 
-	activePeersStr := fmt.Sprintf("%d", am.torrent.Stats().ActivePeers)
-	swarmSizeStr := fmt.Sprintf("%d", am.torrent.Stats().TotalPeers)
+	peersStr := fmt.Sprintf("%d/%d", am.torrent.Stats().ActivePeers, am.torrent.Stats().TotalPeers)
 	downloadSpeedStr := fmt.Sprintf("%s/s", humanSize(am.downloadSpeed))
 
 	var swarmStats string
 	if am.state == stateBuffer {
+		var percent float64
+		if am.done {
+			percent = 100
+		} else {
+			firstPiece := am.file.BeginPieceIndex()
+			lastPiece := am.file.EndPieceIndex()
+			k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+			total := 2 * k
+
+			done := 0
+			for i := firstPiece; i < firstPiece+k; i++ {
+				if am.torrent.Piece(i).State().Complete {
+					done++
+				}
+			}
+			for i := lastPiece - 1; i >= lastPiece-k; i-- {
+				if am.torrent.Piece(i).State().Complete {
+					done++
+				}
+			}
+
+			percent = float64(done) / float64(total) * 100
+		}
+
 		swarmStats = lipgloss.JoinVertical(lipgloss.Left,
-			headerStyle.Underline(true).Render("SWARM INFO"),
-			formatLine("Active Peers", activePeersStr, doneStyle, selectedStyle, width),
-			formatLine("Swarm Size", swarmSizeStr, doneStyle, normalStyle, width),
-			formatLine("DL Speed", downloadSpeedStr, doneStyle, normalStyle, width),
+			headerStyle.Underline(true).Render("SWARM INFO"), "",
+			infoStyle.Render(progressBar(percent, width-10)), "",
+			formatLine("Peers", peersStr, infoStyle, selectedStyle, width),
+			formatLine("DL Speed", downloadSpeedStr, infoStyle, normalStyle, width),
 		)
 	}
 
