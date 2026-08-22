@@ -20,9 +20,9 @@ const (
 	stateBuffer
 )
 
-const bufferPercent = 2
-
 type appModel struct {
+	config *config
+
 	width     int
 	height    int
 	state     state
@@ -48,7 +48,7 @@ type appModel struct {
 	err        error
 }
 
-func newAppModel(c *torrent.Client, dataDir string) *appModel {
+func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	ti := textinput.New()
 	ti.Focus()
 	ti.Prompt = " ❯ "
@@ -63,6 +63,7 @@ func newAppModel(c *torrent.Client, dataDir string) *appModel {
 	s.Spinner = spinner.Line
 
 	return &appModel{
+		config:    cfg,
 		state:     stateInput,
 		mediaOnly: true,
 		input:     ti,

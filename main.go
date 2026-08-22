@@ -9,6 +9,8 @@ import (
 )
 
 func main() {
+	cfg := loadConfig()
+
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		log.Fatalf("failed to get cache dir: %v", err)
@@ -28,7 +30,7 @@ func main() {
 	}
 	defer c.Close()
 
-	app := tea.NewProgram(newAppModel(c, dataDir))
+	app := tea.NewProgram(newAppModel(c, cfg, dataDir))
 	if _, err := app.Run(); err != nil {
 		log.Fatalf("error running program: %v", err)
 	}

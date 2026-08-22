@@ -69,7 +69,7 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 		files := am.visibleFiles()
 		if len(files) == 1 {
 			am.file = files[0]
-			setFilePriority(am.torrent, am.file)
+			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
 			am.state = stateBuffer
 		} else {
 			am.state = stateSelect
@@ -101,7 +101,7 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 		case "enter":
 			am.file = am.visibleFiles()[am.cursor]
-			setFilePriority(am.torrent, am.file)
+			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
 			am.state = stateBuffer
 
 		case "esc":
@@ -116,7 +116,7 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 	return am, nil
 }
 
-type mpvStoppedMsg struct{}
+type playerStoppedMsg struct{}
 
 func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -157,7 +157,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 
 		firstPiece := am.file.BeginPieceIndex()
 		lastPiece := am.file.EndPieceIndex()
-		k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+		k := max(1, (lastPiece-firstPiece)/(100/am.config.BufferPercent))
 
 		firstDone := true
 		for i := firstPiece; i < firstPiece+k; i++ {
@@ -177,7 +177,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 
 		if firstDone && lastDone {
 			reader := am.file.NewReader()
-			reader.SetReadahead(62 << 20)
+			reader.SetReadahead(am.config.ReadAhead << 20)
 
 			ln, err := serveToPort(am.file.DisplayPath(), reader)
 			if err != nil {
@@ -186,7 +186,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 			port := ln.Addr().(*net.TCPAddr).Port
 
-			playerCmd := exec.Command("mpv", fmt.Sprintf("http://localhost:%d/stream", port))
+			playerCmd := exec.Command(am.config.Player, fmt.Sprintf("http://localhost:%d/stream", port))
 			if err := playerCmd.Start(); err != nil {
 				am.err = err
 				return am, nil
@@ -199,13 +199,13 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 				_ = reader.Close()
 				_ = ln.Close()
 
-				return mpvStoppedMsg{}
+				return playerStoppedMsg{}
 			}
 		}
 
 		return am, nil
 
-	case mpvStoppedMsg:
+	case playerStoppedMsg:
 		if am.torrent != nil {
 			torrentPaths := torrentPaths(am.dataDir, am.torrent.Name())
 			now := time.Now()
@@ -227,7 +227,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 	return am, nil
 }
 
-func setFilePriority(t *torrent.Torrent, f *torrent.File) {
+func setFilePriority(t *torrent.Torrent, f *torrent.File, bufferPercent int) {
 	firstPiece := f.BeginPieceIndex()
 	lastPiece := f.EndPieceIndex()
 

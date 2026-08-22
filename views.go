@@ -154,7 +154,7 @@ func (am appModel) selectView(width, height int) string {
 func (am appModel) statsView(width int) string {
 	status := headerStyle.Render("Status: ")
 	if am.done {
-		status += infoStyle.Render("Playing on MPV")
+		status += infoStyle.Render("Playing on " + am.config.Player)
 	} else if am.state == stateBuffer {
 		status += selectedStyle.Render("Buffering " + am.spinner.View())
 	} else {
@@ -197,7 +197,7 @@ func (am appModel) statsView(width int) string {
 		} else {
 			firstPiece := am.file.BeginPieceIndex()
 			lastPiece := am.file.EndPieceIndex()
-			k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))
+			k := max(1, (lastPiece-firstPiece)/(100/am.config.BufferPercent))
 			total := 2 * k
 
 			done := 0
