@@ -66,10 +66,12 @@ func (am appModel) View() tea.View {
 	}
 
 	var input string
-	if am.err != nil {
-		input = errBorderStyle.Width(inputWidth).Render(am.input.View())
-	} else if am.state == stateInput {
-		input = activeBorderStyle.Width(inputWidth).Render(am.input.View())
+	if am.state == stateInput {
+		if am.err != nil {
+			input = errBorderStyle.Width(inputWidth).Render(am.input.View())
+		} else {
+			input = activeBorderStyle.Width(inputWidth).Render(am.input.View())
+		}
 	} else {
 		input = borderStyle.Width(inputWidth).Render(am.input.View())
 	}
@@ -237,8 +239,10 @@ func (am appModel) footerView() string {
 	}
 	keys[escIdx].action = escStr
 
+	hasMedia := am.torrent != nil && len(mediaFiles(am.torrent.Files())) > 0
 	mediaToggleStr := "Media Only"
-	if am.mediaOnly {
+
+	if hasMedia && am.mediaOnly {
 		mediaToggleStr = "All Files"
 	}
 	keys[mediaToggleIdx].action = mediaToggleStr

@@ -64,6 +64,13 @@ func mediaFiles(files []*torrent.File) []*torrent.File {
 	return ret
 }
 
+func isMedia(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	_, ok := mediaExtensions[ext]
+
+	return ok
+}
+
 func progressBar(percent float64, width int) string {
 	filled := int(percent / 100 * float64(width))
 	if filled > width {

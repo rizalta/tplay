@@ -11,6 +11,16 @@ import (
 func main() {
 	cfg := loadConfig()
 
+	cfgPath, err := configPath()
+	if err != nil {
+		log.Printf("error getting config path: %v", err)
+	}
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		if err := saveConfig(cfg); err != nil {
+			log.Printf("error saving the config: %v", err)
+		}
+	}
+
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		log.Fatalf("failed to get cache dir: %v", err)
@@ -20,7 +30,7 @@ func main() {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
 
-	if err := cleanOldCache(dataDir); err != nil {
+	if err := cleanOldCache(dataDir, cfg.Cache); err != nil {
 		log.Printf("error cleaning cache: %v", err)
 	}
 

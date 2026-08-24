@@ -139,5 +139,10 @@ func (am appModel) visibleFiles() []*torrent.File {
 		return am.torrent.Files()
 	}
 
-	return mediaFiles(am.torrent.Files())
+	filtered := mediaFiles(am.torrent.Files())
+	if len(filtered) == 0 {
+		return am.torrent.Files()
+	}
+
+	return filtered
 }

@@ -56,6 +56,7 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 			am.state = stateInput
 			return am, nil
 		}
+
 	case loadTorrentMsg:
 		if msg.err != nil {
 			if errors.Is(msg.err, context.Canceled) {
@@ -65,15 +66,17 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 			am.state = stateInput
 			return am, nil
 		}
+
 		am.torrent = msg.torrent
 		files := am.visibleFiles()
-		if len(files) == 1 {
+		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
 			am.file = files[0]
 			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
 			am.state = stateBuffer
 		} else {
 			am.state = stateSelect
 		}
+
 		return am, nil
 	}
 
@@ -101,9 +104,13 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 		case "enter":
 			am.file = am.visibleFiles()[am.cursor]
-			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
-			am.state = stateBuffer
 
+			if !isMedia(am.file.DisplayPath()) {
+				am.err = fmt.Errorf("not a media file")
+			} else {
+				setFilePriority(am.torrent, am.file, am.config.BufferPercent)
+				am.state = stateBuffer
+			}
 		case "esc":
 			am.torrent = nil
 			am.cursor = 0
@@ -155,6 +162,10 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			return am, nil
 		}
 
+		if am.config.BufferPercent <= 0 {
+			am.config.BufferPercent = 1
+		}
+
 		firstPiece := am.file.BeginPieceIndex()
 		lastPiece := am.file.EndPieceIndex()
 		k := max(1, (lastPiece-firstPiece)/(100/am.config.BufferPercent))
@@ -186,7 +197,13 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 			port := ln.Addr().(*net.TCPAddr).Port
 
-			playerCmd := exec.Command(am.config.Player, fmt.Sprintf("http://localhost:%d/stream", port))
+			playerPath, err := resolvePlayer(am.config.Player)
+			if err != nil {
+				am.err = err
+				return am, nil
+			}
+
+			playerCmd := exec.Command(playerPath, fmt.Sprintf("http://localhost:%d/stream", port))
 			if err := playerCmd.Start(); err != nil {
 				am.err = err
 				return am, nil
@@ -230,6 +247,10 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 func setFilePriority(t *torrent.Torrent, f *torrent.File, bufferPercent int) {
 	firstPiece := f.BeginPieceIndex()
 	lastPiece := f.EndPieceIndex()
+
+	if bufferPercent <= 0 {
+		bufferPercent = 1
+	}
 
 	f.SetPriority(torrent.PiecePriorityNormal)
 	k := max(1, (lastPiece-firstPiece)/(100/bufferPercent))

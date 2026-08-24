@@ -13,10 +13,6 @@ import (
 	"github.com/anacrolix/torrent"
 )
 
-const (
-	maxDays = 5 * 24 * time.Hour
-)
-
 func newClient(dataDir string) (*torrent.Client, error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = dataDir
@@ -30,7 +26,11 @@ func newClient(dataDir string) (*torrent.Client, error) {
 	return c, err
 }
 
-func cleanOldCache(dataDir string) error {
+func cleanOldCache(dataDir string, maxDays int) error {
+	if maxDays <= 0 {
+		return nil
+	}
+
 	entries, err := os.ReadDir(dataDir)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func cleanOldCache(dataDir string) error {
 			continue
 		}
 
-		if time.Since(stat.ModTime()) > maxDays {
+		if time.Since(stat.ModTime()) > time.Duration(maxDays)*24*time.Hour {
 			_ = os.RemoveAll(entryPath)
 		}
 	}
