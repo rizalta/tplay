@@ -68,6 +68,8 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 		}
 
 		am.torrent = msg.torrent
+		am.sessionTorrents[am.torrent.Name()] = struct{}{}
+
 		files := am.visibleFiles()
 		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
 			am.file = files[0]

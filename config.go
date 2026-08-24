@@ -76,7 +76,7 @@ func defaultConfig() *config {
 		ReadAhead:     62,
 		Cache:         0,
 		NoCache:       false,
-		BufferPercent: 2,
+		BufferPercent: 1,
 	}
 }
 

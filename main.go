@@ -41,7 +41,18 @@ func main() {
 	defer c.Close()
 
 	app := tea.NewProgram(newAppModel(c, cfg, dataDir))
-	if _, err := app.Run(); err != nil {
+	res, err := app.Run()
+	if err != nil {
 		log.Fatalf("error running program: %v", err)
+	}
+
+	if cfg.NoCache {
+		if am, ok := res.(appModel); ok {
+			for name := range am.sessionTorrents {
+				for _, p := range torrentPaths(dataDir, name) {
+					_ = os.RemoveAll(p)
+				}
+			}
+		}
 	}
 }

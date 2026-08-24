@@ -21,7 +21,8 @@ const (
 )
 
 type appModel struct {
-	config *config
+	config          *config
+	sessionTorrents map[string]struct{}
 
 	width     int
 	height    int
@@ -63,13 +64,14 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	s.Spinner = spinner.Line
 
 	return &appModel{
-		config:    cfg,
-		state:     stateInput,
-		mediaOnly: true,
-		input:     ti,
-		spinner:   s,
-		dataDir:   dataDir,
-		client:    c,
+		config:          cfg,
+		sessionTorrents: make(map[string]struct{}),
+		state:           stateInput,
+		mediaOnly:       true,
+		input:           ti,
+		spinner:         s,
+		dataDir:         dataDir,
+		client:          c,
 	}
 }
 

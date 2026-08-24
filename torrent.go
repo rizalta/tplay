@@ -56,8 +56,17 @@ func cleanOldCache(dataDir string, maxDays int) error {
 }
 
 func torrentPaths(dataDir, name string) []string {
-	torrentPath := filepath.Join(dataDir, name)
-	matches, _ := filepath.Glob(torrentPath + "*")
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return nil
+	}
+
+	var matches []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), name) {
+			matches = append(matches, filepath.Join(dataDir, e.Name()))
+		}
+	}
 
 	return matches
 }
