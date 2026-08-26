@@ -108,6 +108,9 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		am.width = msg.Width
 		am.height = msg.Height
 		am.input.SetWidth(msg.Width - 14)
+		var cmd tea.Cmd
+		am.input, cmd = am.input.Update(msg)
+		return am, cmd
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd

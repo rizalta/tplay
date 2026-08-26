@@ -166,9 +166,9 @@ func (am appModel) statsView(width int) string {
 
 	torrentInfo := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Underline(true).Render("TORRENT INFO"),
-		formatLine("Name", am.torrent.Name(), infoStyle, selectedStyle, width),
-		formatLine("Total Size", humanSize(am.torrent.Length()), infoStyle, normalStyle, width),
-		formatLine("Info Hash", am.torrent.InfoHash().HexString(), infoStyle, mutedStyle, width),
+		formatLine("Name", am.torrent.Name(), infoStyle, selectedStyle, width, am.tickCount),
+		formatLine("Total Size", humanSize(am.torrent.Length()), infoStyle, normalStyle, width, am.tickCount),
+		formatLine("Info Hash", am.torrent.InfoHash().HexString(), infoStyle, mutedStyle, width, am.tickCount),
 	)
 
 	f := am.visibleFiles()[am.cursor]
@@ -182,10 +182,10 @@ func (am appModel) statsView(width int) string {
 
 	fileInfo := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Underline(true).Render("FILE INFO"),
-		formatLine("Name", filename, infoStyle, selectedStyle, width),
-		formatLine("Directory", fileDir, infoStyle, normalStyle, width),
-		formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width),
-		formatLine("Type", fileExt, infoStyle, normalStyle, width),
+		formatLine("Name", filename, infoStyle, selectedStyle, width, am.tickCount),
+		formatLine("Directory", fileDir, infoStyle, normalStyle, width, am.tickCount),
+		formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width, am.tickCount),
+		formatLine("Type", fileExt, infoStyle, normalStyle, width, am.tickCount),
 	)
 
 	peersStr := fmt.Sprintf("%d/%d", am.torrent.Stats().ActivePeers, am.torrent.Stats().TotalPeers)
@@ -220,8 +220,8 @@ func (am appModel) statsView(width int) string {
 		swarmStats = lipgloss.JoinVertical(lipgloss.Left,
 			headerStyle.Underline(true).Render("SWARM INFO"), "",
 			infoStyle.Render(progressBar(percent, width-10)), "",
-			formatLine("Peers", peersStr, infoStyle, selectedStyle, width),
-			formatLine("DL Speed", downloadSpeedStr, infoStyle, normalStyle, width),
+			formatLine("Peers", peersStr, infoStyle, selectedStyle, width, am.tickCount),
+			formatLine("DL Speed", downloadSpeedStr, infoStyle, normalStyle, width, am.tickCount),
 		)
 	}
 
@@ -256,14 +256,16 @@ func (am appModel) footerView() string {
 	return footer
 }
 
-func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int) string {
+func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int, step int) string {
 	labelWidth := min(width, 12)
 	valWidth := width - labelWidth - 6
+	if valWidth < 1 {
+		valWidth = 1
+	}
 
-	wrappedVal := lipgloss.Wrap(val, width, " ")
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		labelStyle.Width(labelWidth).Render(label),
 		": ",
-		valStyle.Width(valWidth).Render(wrappedVal),
+		valStyle.Width(valWidth).Render(marquee(val, valWidth, step)),
 	)
 }
