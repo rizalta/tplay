@@ -20,6 +20,10 @@ var (
 	infoStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1"))
 	errStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("#F38BA8"))
 	errBorderStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#F38BA8"))
+	popupStyle        = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				Padding(1, 2).
+				BorderForeground(lipgloss.Color("#CBA6F7"))
 )
 
 const (
@@ -54,6 +58,31 @@ var keys = []struct {
 }
 
 func (am appModel) View() tea.View {
+	var s string
+
+	base := lipgloss.NewStyle().Faint(true).Render(am.baseUI())
+	popup := am.settingsPopup()
+	x := (am.width - lipgloss.Width(popup)) / 2
+	y := (am.height - lipgloss.Height(popup)) / 2
+
+	if am.state == stateSettings {
+		popupLayer := lipgloss.NewLayer(popup).X(x).Y(y).Z(1)
+		baseLayer := lipgloss.NewLayer(base, popupLayer)
+
+		comp := lipgloss.NewCompositor(baseLayer, popupLayer)
+
+		s = comp.Render()
+	} else {
+		s = base
+	}
+
+	v := tea.NewView(s)
+	v.AltScreen = true
+
+	return v
+}
+
+func (am appModel) baseUI() string {
 	logo := logoStyle.Render("▀█▀ █▀█ █   ▄▀█ █▄█\n █  █▀▀ █▄▄ █▀█  █ ")
 	title := headerStyle.Render("Play ur torrents")
 	header := lipgloss.JoinHorizontal(lipgloss.Bottom, logo, "  ", title)
@@ -76,11 +105,6 @@ func (am appModel) View() tea.View {
 		input = borderStyle.Width(inputWidth).Render(am.input.View())
 	}
 
-	var errorMsg string
-	if am.err != nil {
-		errorMsg = errStyle.Render("! " + strings.ToTitle(am.err.Error()))
-	}
-
 	leftWidth := (am.width - 6) * 2 / 3
 	rightWidth := am.width - leftWidth - 6
 	panelHeight := am.height - 9
@@ -96,7 +120,8 @@ func (am appModel) View() tea.View {
 	}
 
 	var rightPanel string
-	if errorMsg != "" {
+	if am.err != nil && am.state != stateSettings {
+		errorMsg := errStyle.Render("! " + strings.ToTitle(am.err.Error()))
 		rightPanel = errBorderStyle.Width(rightWidth).Height(panelHeight).Render(errorMsg)
 	} else {
 		switch am.state {
@@ -113,9 +138,62 @@ func (am appModel) View() tea.View {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	footer := am.footerView()
 
-	v := tea.NewView(borderStyle.Width(am.width - 2).Height(am.height - 2).Render(lipgloss.JoinVertical(lipgloss.Left, header, input, body, footer)))
-	v.AltScreen = true
-	return v
+	s := borderStyle.Width(am.width - 2).Height(am.height - 2).Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			header,
+			input,
+			body,
+			footer,
+		),
+	)
+
+	return s
+}
+
+func (am appModel) settingsPopup() string {
+	popupWidth := am.width / 3
+	if popupWidth < 36 {
+		popupWidth = 36
+	}
+	labelWidth := popupWidth / 3
+	valWidth := popupWidth - labelWidth
+
+	title := "  " + headerStyle.Bold(true).Underline(true).Width(popupWidth).Render("SETTINGS")
+	rows := []string{title, ""}
+	for i, item := range settingsItems {
+		label := item.label
+		val := item.getValue(am.config)
+
+		if item.isPlayer {
+			val = "← " + val + " →"
+		}
+
+		if i == am.settingsCursor {
+			if am.settingsEdit && !item.isBool && !item.isPlayer {
+				if am.err != nil {
+					val = errStyle.Render(am.settingsInput.View())
+				} else {
+					val = am.settingsInput.View()
+				}
+			}
+			row := lipgloss.JoinHorizontal(
+				lipgloss.Top,
+				infoStyle.Width(labelWidth).Render("▶ "+label),
+				selectedStyle.Width(valWidth).Render(val),
+			)
+			rows = append(rows, row)
+		} else {
+			row := lipgloss.JoinHorizontal(
+				lipgloss.Top,
+				normalStyle.Width(labelWidth).Render("  "+label),
+				mutedStyle.Width(valWidth).Render(val),
+			)
+			rows = append(rows, row)
+		}
+	}
+
+	return popupStyle.Width(popupWidth).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
 func (am appModel) selectView(width, height int) string {

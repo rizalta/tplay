@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os/exec"
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -18,6 +19,7 @@ const (
 	stateLoading
 	stateSelect
 	stateBuffer
+	stateSettings
 )
 
 type appModel struct {
@@ -27,6 +29,7 @@ type appModel struct {
 	width     int
 	height    int
 	state     state
+	prevState state
 	mediaOnly bool
 
 	input   textinput.Model
@@ -37,6 +40,11 @@ type appModel struct {
 	tickCount     int
 	downloadSpeed int64
 	prevBytes     int64
+
+	playerIdx      int
+	settingsCursor int
+	settingsEdit   bool
+	settingsInput  textinput.Model
 
 	dataDir   string
 	torrent   *torrent.Torrent
@@ -60,16 +68,34 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	tiStyles.Blurred.Prompt = mutedStyle
 	ti.SetStyles(tiStyles)
 
+	si := textinput.New()
+	si.Focus()
+	si.Prompt = ""
+	siStyles := si.Styles()
+	siStyles.Focused.Text = selectedStyle
+	siStyles.Blurred.Text = mutedStyle
+	si.SetStyles(siStyles)
+
 	s := spinner.New()
 	s.Spinner = spinner.Line
+
+	playerIdx := slices.IndexFunc(knownPlayers, func(p player) bool {
+		return p.name == cfg.Player
+	})
+	if playerIdx == -1 {
+		playerIdx = 0
+	}
 
 	return &appModel{
 		config:          cfg,
 		sessionTorrents: make(map[string]struct{}),
 		state:           stateInput,
+		prevState:       stateInput,
 		mediaOnly:       true,
 		input:           ti,
 		spinner:         s,
+		playerIdx:       playerIdx,
+		settingsInput:   si,
 		dataDir:         dataDir,
 		client:          c,
 	}
@@ -98,6 +124,11 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			am.mediaOnly = !am.mediaOnly
 			am.cursor = 0
 			am.scrollOffset = 0
+			return am, nil
+
+		case "ctrl+s":
+			am.prevState = am.state
+			am.state = stateSettings
 			return am, nil
 		}
 
@@ -128,6 +159,8 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		am, cmd = am.updateSelect(msg)
 	case stateBuffer:
 		am, cmd = am.updateBuffer(msg)
+	case stateSettings:
+		am, cmd = am.updateSettings(msg)
 	}
 
 	if _, ok := msg.(tickMsg); ok {

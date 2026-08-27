@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
 )
@@ -241,6 +242,83 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 		am.state = stateSelect
 
 		return am, nil
+	}
+
+	return am, nil
+}
+
+func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
+	s := settingsItems[am.settingsCursor]
+	siStyles := am.settingsInput.Styles()
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "up":
+			if am.settingsCursor > 0 {
+				am.settingsCursor--
+			}
+
+		case "down":
+			if am.settingsCursor < len(settingsItems)-1 {
+				am.settingsCursor++
+			}
+
+		case "left":
+			if s.isPlayer {
+				am.playerIdx = (am.playerIdx - 1 + len(knownPlayers)) % len(knownPlayers)
+				am.config.Player = knownPlayers[am.playerIdx].name
+			}
+
+		case "right":
+			if s.isPlayer {
+				am.playerIdx = (am.playerIdx + 1) % len(knownPlayers)
+				am.config.Player = knownPlayers[am.playerIdx].name
+			}
+
+		case "enter":
+			if s.isBool {
+				am.config.NoCache = !am.config.NoCache
+			} else if !s.isPlayer {
+				am.err = nil
+				siStyles.Blurred.Text = selectedStyle
+				siStyles.Focused.Text = normalStyle
+				am.settingsInput.SetStyles(siStyles)
+				if !am.settingsEdit {
+					am.settingsEdit = true
+					am.settingsInput.SetValue(s.getValue(am.config))
+					return am, textinput.Blink
+				} else {
+					err := s.setValue(am.config, am.settingsInput.Value())
+					if err != nil {
+						am.err = err
+						siStyles.Blurred.Text = errStyle
+						siStyles.Focused.Text = errStyle
+						am.settingsInput.SetStyles(siStyles)
+						return am, nil
+					}
+					am.settingsEdit = false
+				}
+			}
+
+		case "esc":
+			if am.settingsEdit {
+				am.err = nil
+				siStyles.Blurred.Text = selectedStyle
+				siStyles.Focused.Text = normalStyle
+				am.settingsInput.SetStyles(siStyles)
+				am.settingsEdit = false
+				return am, nil
+			}
+			am.state = am.prevState
+			_ = saveConfig(am.config)
+		}
+	}
+
+	if am.settingsEdit {
+		var cmd tea.Cmd
+		am.settingsInput, cmd = am.settingsInput.Update(msg)
+		return am, cmd
 	}
 
 	return am, nil
