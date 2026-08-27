@@ -264,16 +264,17 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 				am.settingsCursor++
 			}
 
-		case "left":
+		case "left", "right":
 			if s.isPlayer {
-				am.playerIdx = (am.playerIdx - 1 + len(knownPlayers)) % len(knownPlayers)
+				dir := 1
+				if msg.String() == "left" {
+					dir = -1
+				}
+				am.playerIdx = (am.playerIdx + dir + len(knownPlayers)) % len(knownPlayers)
 				am.config.Player = knownPlayers[am.playerIdx].name
 			}
-
-		case "right":
-			if s.isPlayer {
-				am.playerIdx = (am.playerIdx + 1) % len(knownPlayers)
-				am.config.Player = knownPlayers[am.playerIdx].name
+			if s.isBool {
+				am.config.NoCache = !am.config.NoCache
 			}
 
 		case "enter":

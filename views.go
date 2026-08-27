@@ -15,15 +15,12 @@ var (
 	selectedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#B4BEFE"))
 	normalStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4"))
 	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6ADC8"))
-	borderStyle       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#585B70"))
-	activeBorderStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#CBA6F7"))
 	infoStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1"))
 	errStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("#F38BA8"))
+	borderStyle       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#585B70"))
+	activeBorderStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#CBA6F7"))
 	errBorderStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#F38BA8"))
-	popupStyle        = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				Padding(1, 2).
-				BorderForeground(lipgloss.Color("#CBA6F7"))
+	popupStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#CBA6F7"))
 )
 
 const (
@@ -31,10 +28,12 @@ const (
 	mediaToggleIdx = 3
 )
 
-var keys = []struct {
+type hint struct {
 	key    string
 	action string
-}{
+}
+
+var baseHints = []hint{
 	{
 		key:    "↑/↓",
 		action: "Navigate",
@@ -44,16 +43,33 @@ var keys = []struct {
 		action: "Select",
 	},
 	{
-		key:    "Esc",
-		action: "",
+		key: "Esc",
 	},
 	{
-		key:    "Tab",
-		action: "",
+		key: "Tab",
 	},
 	{
 		key:    "Ctrl+C",
 		action: "Quit",
+	},
+}
+
+var settingsHints = []hint{
+	{
+		key:    "↑/↓",
+		action: "Navigate",
+	},
+	{
+		key:    "Enter",
+		action: "Select/Toggle",
+	},
+	{
+		key:    "Esc",
+		action: "Cancel/Save",
+	},
+	{
+		key:    "←/→",
+		action: "Cycle",
 	},
 }
 
@@ -153,8 +169,8 @@ func (am appModel) baseUI() string {
 
 func (am appModel) settingsPopup() string {
 	popupWidth := am.width / 3
-	if popupWidth < 36 {
-		popupWidth = 36
+	if popupWidth < 46 {
+		popupWidth = 46
 	}
 	labelWidth := popupWidth / 3
 	valWidth := popupWidth - labelWidth
@@ -165,7 +181,7 @@ func (am appModel) settingsPopup() string {
 		label := item.label
 		val := item.getValue(am.config)
 
-		if item.isPlayer {
+		if item.isPlayer || item.isBool {
 			val = "← " + val + " →"
 		}
 
@@ -192,6 +208,13 @@ func (am appModel) settingsPopup() string {
 			rows = append(rows, row)
 		}
 	}
+
+	var footer string
+	for _, h := range settingsHints {
+		footer = lipgloss.JoinHorizontal(lipgloss.Left, footer, formatHint(h), "  ")
+	}
+
+	rows = append(rows, "", footer)
 
 	return popupStyle.Width(popupWidth).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
@@ -315,7 +338,7 @@ func (am appModel) footerView() string {
 	if am.state == stateInput {
 		escStr = "Clear"
 	}
-	keys[escIdx].action = escStr
+	baseHints[escIdx].action = escStr
 
 	hasMedia := am.torrent != nil && len(mediaFiles(am.torrent.Files())) > 0
 	mediaToggleStr := "Media Only"
@@ -323,15 +346,19 @@ func (am appModel) footerView() string {
 	if hasMedia && am.mediaOnly {
 		mediaToggleStr = "All Files"
 	}
-	keys[mediaToggleIdx].action = mediaToggleStr
+	baseHints[mediaToggleIdx].action = mediaToggleStr
 
 	footer := "  "
-	for _, k := range keys {
-		line := lipgloss.JoinHorizontal(lipgloss.Center, normalStyle.Render(k.key), " ", mutedStyle.Render(k.action))
+	for _, h := range baseHints {
+		line := formatHint(h)
 		footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", line)
 	}
 
 	return footer
+}
+
+func formatHint(h hint) string {
+	return lipgloss.JoinHorizontal(lipgloss.Center, normalStyle.Render(h.key), " ", mutedStyle.Render(h.action))
 }
 
 func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int, step int) string {
