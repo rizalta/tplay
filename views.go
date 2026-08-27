@@ -23,67 +23,93 @@ var (
 	popupStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).BorderForeground(lipgloss.Color("#CBA6F7"))
 )
 
-const (
-	escIdx         = 2
-	mediaToggleIdx = 3
-)
-
 type hint struct {
 	key    string
-	action string
+	action func(am appModel) string
 }
 
 var baseHints = []hint{
 	{
 		key:    "↑/↓",
-		action: "Navigate",
+		action: func(am appModel) string { return "Navigate" },
 	},
 	{
 		key:    "Enter",
-		action: "Select",
+		action: func(am appModel) string { return "Select" },
 	},
 	{
 		key: "Esc",
+		action: func(am appModel) string {
+			if am.state == stateInput {
+				return "Clear"
+			}
+			return "Back"
+		},
 	},
 	{
 		key: "Tab",
+		action: func(am appModel) string {
+			hasMedia := am.torrent != nil && len(mediaFiles(am.torrent.Files())) > 0
+
+			if hasMedia && am.mediaOnly {
+				return "All Files"
+			}
+			return "Media Only"
+		},
+	},
+	{
+		key:    "Ctrl+S",
+		action: func(am appModel) string { return "Settings" },
 	},
 	{
 		key:    "Ctrl+C",
-		action: "Quit",
+		action: func(am appModel) string { return "Quit" },
 	},
 }
 
 var settingsHints = []hint{
 	{
 		key:    "↑/↓",
-		action: "Navigate",
+		action: func(am appModel) string { return "Navigate" },
 	},
 	{
-		key:    "Enter",
-		action: "Select/Toggle",
+		key: "Enter",
+		action: func(am appModel) string {
+			if am.settingsEdit {
+				return "Confirm"
+			}
+			return "Select"
+		},
 	},
 	{
-		key:    "Esc",
-		action: "Cancel/Save",
+		key: "Esc",
+		action: func(am appModel) string {
+			if am.settingsEdit {
+				return "Cancel"
+			}
+			return "Save/Back"
+		},
 	},
 	{
 		key:    "←/→",
-		action: "Cycle",
+		action: func(am appModel) string { return "Cycle" },
 	},
 }
 
 func (am appModel) View() tea.View {
 	var s string
 
-	base := lipgloss.NewStyle().Faint(true).Render(am.baseUI())
-	popup := am.settingsPopup()
-	x := (am.width - lipgloss.Width(popup)) / 2
-	y := (am.height - lipgloss.Height(popup)) / 2
+	base := am.baseUI()
 
 	if am.state == stateSettings {
+		popup := am.settingsPopup()
+
+		x := (am.width - lipgloss.Width(popup)) / 2
+		y := (am.height - lipgloss.Height(popup)) / 2
+
+		dimmedBase := lipgloss.NewStyle().Faint(true).Render(base)
 		popupLayer := lipgloss.NewLayer(popup).X(x).Y(y).Z(1)
-		baseLayer := lipgloss.NewLayer(base, popupLayer)
+		baseLayer := lipgloss.NewLayer(dimmedBase, popupLayer)
 
 		comp := lipgloss.NewCompositor(baseLayer, popupLayer)
 
@@ -209,13 +235,6 @@ func (am appModel) settingsPopup() string {
 		}
 	}
 
-	var footer string
-	for _, h := range settingsHints {
-		footer = lipgloss.JoinHorizontal(lipgloss.Left, footer, formatHint(h), "  ")
-	}
-
-	rows = append(rows, "", footer)
-
 	return popupStyle.Width(popupWidth).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
@@ -334,31 +353,22 @@ func (am appModel) statsView(width int) string {
 }
 
 func (am appModel) footerView() string {
-	escStr := "Back"
-	if am.state == stateInput {
-		escStr = "Clear"
-	}
-	baseHints[escIdx].action = escStr
-
-	hasMedia := am.torrent != nil && len(mediaFiles(am.torrent.Files())) > 0
-	mediaToggleStr := "Media Only"
-
-	if hasMedia && am.mediaOnly {
-		mediaToggleStr = "All Files"
-	}
-	baseHints[mediaToggleIdx].action = mediaToggleStr
-
 	footer := "  "
-	for _, h := range baseHints {
-		line := formatHint(h)
-		footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", line)
+	if am.state == stateSettings {
+		for _, h := range settingsHints {
+			footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", formatHint(am, h))
+		}
+	} else {
+		for _, h := range baseHints {
+			footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", formatHint(am, h))
+		}
 	}
 
 	return footer
 }
 
-func formatHint(h hint) string {
-	return lipgloss.JoinHorizontal(lipgloss.Center, normalStyle.Render(h.key), " ", mutedStyle.Render(h.action))
+func formatHint(am appModel, h hint) string {
+	return lipgloss.JoinHorizontal(lipgloss.Center, normalStyle.Render(h.key), " ", mutedStyle.Render(h.action(am)))
 }
 
 func formatLine(label, val string, labelStyle, valStyle lipgloss.Style, width int, step int) string {

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,6 +241,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 		am.done = false
 		am.downloadSpeed = 0
 		am.state = stateSelect
+		am.file = nil
 
 		return am, nil
 	}
@@ -274,12 +276,14 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 				am.config.Player = knownPlayers[am.playerIdx].name
 			}
 			if s.isBool {
-				am.config.NoCache = !am.config.NoCache
+				current := s.getValue(am.config) == "true"
+				_ = s.setValue(am.config, strconv.FormatBool(!current))
 			}
 
 		case "enter":
 			if s.isBool {
-				am.config.NoCache = !am.config.NoCache
+				current := s.getValue(am.config) == "true"
+				_ = s.setValue(am.config, strconv.FormatBool(!current))
 			} else if !s.isPlayer {
 				am.err = nil
 				siStyles.Blurred.Text = selectedStyle
