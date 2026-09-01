@@ -151,11 +151,17 @@ func (am appModel) baseUI() string {
 	rightWidth := am.width - leftWidth - 6
 	panelHeight := am.height - 9
 
+	// Use prevState when settings overlay is open so the base UI stays frozen
+	renderState := am.state
+	if am.state == stateSettings {
+		renderState = am.prevState
+	}
+
 	var leftPanel string
 	if am.torrent != nil {
 		leftPanel = am.selectView(leftWidth, panelHeight)
 	}
-	if am.state == stateSelect {
+	if renderState == stateSelect {
 		leftPanel = activeBorderStyle.Width(leftWidth).Height(panelHeight).Render(leftPanel)
 	} else {
 		leftPanel = borderStyle.Width(leftWidth).Height(panelHeight).Render(mutedStyle.Render(leftPanel))
@@ -166,7 +172,7 @@ func (am appModel) baseUI() string {
 		errorMsg := errStyle.Render("! " + strings.ToTitle(am.err.Error()))
 		rightPanel = errBorderStyle.Width(rightWidth).Height(panelHeight).Render(errorMsg)
 	} else {
-		switch am.state {
+		switch renderState {
 		case stateInput:
 			rightPanel = mutedStyle.Render("Paste your magnet link and press Enter")
 		case stateLoading:
@@ -252,17 +258,22 @@ func (am appModel) selectView(width, height int) string {
 		end = len(files)
 	}
 
+	renderState := am.state
+	if am.state == stateSettings {
+		renderState = am.prevState
+	}
+
 	var ret string
 	for i, f := range files[start:end] {
 		name := f.DisplayPath()
 		if am.cursor == i+start {
-			if am.state == stateSelect {
+			if renderState == stateSelect {
 				ret += selectedStyle.Render("▶ "+marquee(name, maxLen, am.tickCount)) + "\n"
 			} else {
 				ret += mutedStyle.Render("▶ "+marquee(name, maxLen, am.tickCount)) + "\n"
 			}
 		} else {
-			if am.state == stateSelect {
+			if renderState == stateSelect {
 				ret += normalStyle.Render("  "+truncate(name, maxLen)) + "\n"
 			} else {
 				ret += mutedStyle.Render("  "+truncate(name, maxLen)) + "\n"
@@ -274,10 +285,15 @@ func (am appModel) selectView(width, height int) string {
 }
 
 func (am appModel) statsView(width int) string {
+	renderState := am.state
+	if am.state == stateSettings {
+		renderState = am.prevState
+	}
+
 	status := headerStyle.Render("Status: ")
 	if am.done {
 		status += infoStyle.Render("Playing on " + am.config.Player)
-	} else if am.state == stateBuffer {
+	} else if renderState == stateBuffer {
 		status += selectedStyle.Render("Buffering " + am.spinner.View())
 	} else {
 		status += normalStyle.Render("Idle")
@@ -312,7 +328,7 @@ func (am appModel) statsView(width int) string {
 	downloadSpeedStr := fmt.Sprintf("%s/s", humanSize(am.downloadSpeed))
 
 	var swarmStats string
-	if am.state == stateBuffer {
+	if renderState == stateBuffer {
 		var percent float64
 		if am.done {
 			percent = 100
