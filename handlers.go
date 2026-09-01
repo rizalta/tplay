@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -47,41 +46,15 @@ func (am appModel) updateInput(msg tea.Msg) (appModel, tea.Cmd) {
 }
 
 func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "esc" {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		if key.String() == "esc" {
 			if am.cancelLoad != nil {
 				am.cancelLoad()
 				am.cancelLoad = nil
 			}
-
 			am.state = stateInput
 			return am, nil
 		}
-
-	case loadTorrentMsg:
-		if msg.err != nil {
-			if errors.Is(msg.err, context.Canceled) {
-				return am, nil
-			}
-			am.err = msg.err
-			am.state = stateInput
-			return am, nil
-		}
-
-		am.torrent = msg.torrent
-		am.sessionTorrents[am.torrent.Name()] = struct{}{}
-
-		files := am.visibleFiles()
-		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
-			am.file = files[0]
-			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
-			am.state = stateBuffer
-		} else {
-			am.state = stateSelect
-		}
-
-		return am, nil
 	}
 
 	return am, nil

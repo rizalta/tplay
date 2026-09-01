@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"slices"
 	"time"
@@ -127,12 +128,42 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return am, nil
 
 		case "ctrl+s":
-			if am.state != stateSettings && am.state != stateLoading {
+			if am.state != stateSettings {
 				am.prevState = am.state
 				am.state = stateSettings
 			}
 			return am, nil
 		}
+
+	case loadTorrentMsg:
+		if msg.err != nil {
+			if errors.Is(msg.err, context.Canceled) {
+				return am, nil
+			}
+			am.err = msg.err
+			am.state = stateInput
+			return am, nil
+		}
+
+		am.torrent = msg.torrent
+		am.sessionTorrents[am.torrent.Name()] = struct{}{}
+
+		files := am.visibleFiles()
+		var nextState state
+		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
+			am.file = files[0]
+			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
+			nextState = stateBuffer
+		} else {
+			nextState = stateSelect
+		}
+
+		if am.state == stateSettings {
+			am.prevState = nextState
+		} else {
+			am.state = nextState
+		}
+		return am, nil
 
 	case tickMsg:
 		am.tickCount++
