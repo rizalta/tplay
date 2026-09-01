@@ -127,8 +127,10 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return am, nil
 
 		case "ctrl+s":
-			am.prevState = am.state
-			am.state = stateSettings
+			if am.state != stateSettings && am.state != stateLoading {
+				am.prevState = am.state
+				am.state = stateSettings
+			}
 			return am, nil
 		}
 
