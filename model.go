@@ -1,10 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os/exec"
 	"slices"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -206,13 +208,18 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (am appModel) visibleFiles() []*torrent.File {
+	files := slices.Clone(am.torrent.Files())
+	slices.SortFunc(files, func(a, b *torrent.File) int {
+		return cmp.Compare(strings.ToLower(a.DisplayPath()), strings.ToLower(b.DisplayPath()))
+	})
+
 	if !am.mediaOnly {
-		return am.torrent.Files()
+		return files
 	}
 
-	filtered := mediaFiles(am.torrent.Files())
+	filtered := mediaFiles(files)
 	if len(filtered) == 0 {
-		return am.torrent.Files()
+		return files
 	}
 
 	return filtered
