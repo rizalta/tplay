@@ -43,7 +43,6 @@ var baseHints = []hint{
 	{
 		key:    "Enter",
 		action: func(am appModel) string { return "Select" },
-		when:   func(am appModel) bool { return true },
 	},
 	{
 		key: "Esc",
@@ -53,7 +52,6 @@ var baseHints = []hint{
 			}
 			return "Back"
 		},
-		when: func(am appModel) bool { return true },
 	},
 	{
 		key: "Tab",
@@ -63,22 +61,15 @@ var baseHints = []hint{
 			}
 			return "Media Only"
 		},
-		when: func(am appModel) bool {
-			if am.state == stateSelect || am.state == stateBuffer {
-				return true
-			}
-			return false
-		},
+		when: func(am appModel) bool { return am.state == stateSelect || am.state == stateBuffer },
 	},
 	{
 		key:    "Ctrl+S",
 		action: func(am appModel) string { return "Settings" },
-		when:   func(am appModel) bool { return true },
 	},
 	{
 		key:    "Ctrl+C",
 		action: func(am appModel) string { return "Quit" },
-		when:   func(am appModel) bool { return true },
 	},
 }
 
@@ -86,7 +77,6 @@ var settingsHints = []hint{
 	{
 		key:    "↑/↓",
 		action: func(am appModel) string { return "Navigate" },
-		when:   func(am appModel) bool { return true },
 	},
 	{
 		key: "Enter",
@@ -96,7 +86,6 @@ var settingsHints = []hint{
 			}
 			return "Select"
 		},
-		when: func(am appModel) bool { return true },
 	},
 	{
 		key: "Esc",
@@ -106,12 +95,10 @@ var settingsHints = []hint{
 			}
 			return "Save/Back"
 		},
-		when: func(am appModel) bool { return true },
 	},
 	{
 		key:    "←/→",
 		action: func(am appModel) string { return "Cycle" },
-		when:   func(am appModel) bool { return true },
 	},
 }
 

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/anacrolix/torrent"
 )
@@ -318,7 +317,7 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 				if !am.settingsEdit {
 					am.settingsEdit = true
 					am.settingsInput.SetValue(s.getValue(am.config))
-					return am, textinput.Blink
+					return am, am.settingsInput.Focus()
 				} else {
 					err := s.setValue(am.config, am.settingsInput.Value())
 					if err != nil {
@@ -329,6 +328,7 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 						return am, nil
 					}
 					am.settingsEdit = false
+					am.settingsInput.Blur()
 				}
 			}
 
@@ -339,8 +339,10 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 				siStyles.Focused.Text = normalStyle
 				am.settingsInput.SetStyles(siStyles)
 				am.settingsEdit = false
+				am.settingsInput.Blur()
 				return am, nil
 			}
+			am.settingsInput.Blur()
 			am.state = am.prevState
 			_ = saveConfig(am.config)
 		}

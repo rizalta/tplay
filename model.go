@@ -84,7 +84,6 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	fi.SetStyles(fiStyles)
 
 	si := textinput.New()
-	si.Focus()
 	si.Prompt = ""
 	siStyles := si.Styles()
 	siStyles.Focused.Text = selectedStyle
