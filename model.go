@@ -44,6 +44,9 @@ type appModel struct {
 	downloadSpeed int64
 	prevBytes     int64
 
+	filterInput  textinput.Model
+	filterActive bool
+
 	playerIdx      int
 	settingsCursor int
 	settingsEdit   bool
@@ -71,6 +74,15 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	tiStyles.Blurred.Prompt = mutedStyle
 	ti.SetStyles(tiStyles)
 
+	fi := textinput.New()
+	fi.Prompt = "/ "
+	fi.Placeholder = "Filter"
+	fi.CharLimit = 0
+	fiStyles := fi.Styles()
+	fiStyles.Focused.Prompt = selectedStyle
+	fiStyles.Blurred.Prompt = mutedStyle
+	fi.SetStyles(fiStyles)
+
 	si := textinput.New()
 	si.Focus()
 	si.Prompt = ""
@@ -97,6 +109,7 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 		mediaOnly:       true,
 		input:           ti,
 		spinner:         s,
+		filterInput:     fi,
 		playerIdx:       playerIdx,
 		settingsInput:   si,
 		dataDir:         dataDir,
@@ -149,6 +162,10 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		am.torrent = msg.torrent
 		am.sessionTorrents[am.torrent.Name()] = struct{}{}
+		am.cursor = 0
+		am.scrollOffset = 0
+		am.filterInput.Reset()
+		am.filterInput.Blur()
 
 		files := am.visibleFiles()
 		var nextState state
@@ -173,7 +190,8 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		am.width = msg.Width
 		am.height = msg.Height
-		am.input.SetWidth(msg.Width - 14)
+		am.input.SetWidth(max(1, msg.Width-14))
+		am.filterInput.SetWidth(max(1, msg.Width-14))
 		var cmd tea.Cmd
 		am.input, cmd = am.input.Update(msg)
 		return am, cmd
@@ -208,19 +226,16 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (am appModel) visibleFiles() []*torrent.File {
-	files := slices.Clone(am.torrent.Files())
-	slices.SortFunc(files, func(a, b *torrent.File) int {
+	filtered := slices.Clone(am.torrent.Files())
+	if am.mediaOnly {
+		filtered = mediaFiles(am.torrent.Files())
+	}
+
+	filtered = filterFiles(filtered, am.filterInput.Value())
+
+	slices.SortFunc(filtered, func(a, b *torrent.File) int {
 		return cmp.Compare(strings.ToLower(a.DisplayPath()), strings.ToLower(b.DisplayPath()))
 	})
-
-	if !am.mediaOnly {
-		return files
-	}
-
-	filtered := mediaFiles(files)
-	if len(filtered) == 0 {
-		return files
-	}
 
 	return filtered
 }

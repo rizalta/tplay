@@ -6,6 +6,7 @@ Stream torrents directly to your media player from the terminal.
 
 - Stream from magnet links without downloading the full file
 - Auto-selects single media files, file picker for multi-file torrents
+- Name-sorted file list with live filtering
 - Supports **mpv**, **VLC**, and **IINA**
 - Cache management with TTL cleanup and no-cache mode
 
@@ -31,12 +32,15 @@ tplay
 
 Paste a magnet link and press `Enter`.
 
+Press `/` to filter the file list; `Enter` applies it and `Esc` clears it. Torrents without media files show an empty list — press `Tab` to show all files.
+
 ## Keybindings
 
 | Key      | Action                   |
 |----------|--------------------------|
 | `↑ / ↓` | Navigate files           |
 | `Enter`  | Select file              |
+| `/`      | Filter files             |
 | `Tab`    | Toggle media / all files |
 | `Esc`    | Back / cancel            |
 | `Ctrl+S` | Open settings            |

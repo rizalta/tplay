@@ -79,3 +79,21 @@ func progressBar(percent float64, width int) string {
 
 	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 }
+
+func filterFiles(files []*torrent.File, query string) []*torrent.File {
+	query = strings.TrimSpace(strings.ToLower(query))
+
+	if query == "" {
+		return files
+	}
+
+	filtered := []*torrent.File{}
+
+	for _, f := range files {
+		if strings.Contains(strings.ToLower(f.DisplayPath()), query) {
+			filtered = append(filtered, f)
+		}
+	}
+
+	return filtered
+}

@@ -26,44 +26,59 @@ var (
 type hint struct {
 	key    string
 	action func(am appModel) string
+	when   func(am appModel) bool
 }
 
 var baseHints = []hint{
 	{
+		key:    "/",
+		action: func(am appModel) string { return "Filter" },
+		when:   func(am appModel) bool { return am.state == stateSelect },
+	},
+	{
 		key:    "↑/↓",
 		action: func(am appModel) string { return "Navigate" },
+		when:   func(am appModel) bool { return am.state == stateSelect },
 	},
 	{
 		key:    "Enter",
 		action: func(am appModel) string { return "Select" },
+		when:   func(am appModel) bool { return true },
 	},
 	{
 		key: "Esc",
 		action: func(am appModel) string {
-			if am.state == stateInput {
+			if am.state == stateInput || am.filterInput.Value() != "" {
 				return "Clear"
 			}
 			return "Back"
 		},
+		when: func(am appModel) bool { return true },
 	},
 	{
 		key: "Tab",
 		action: func(am appModel) string {
-			hasMedia := am.torrent != nil && len(mediaFiles(am.torrent.Files())) > 0
-
-			if hasMedia && am.mediaOnly {
+			if am.torrent != nil && am.mediaOnly {
 				return "All Files"
 			}
 			return "Media Only"
+		},
+		when: func(am appModel) bool {
+			if am.state == stateSelect || am.state == stateBuffer {
+				return true
+			}
+			return false
 		},
 	},
 	{
 		key:    "Ctrl+S",
 		action: func(am appModel) string { return "Settings" },
+		when:   func(am appModel) bool { return true },
 	},
 	{
 		key:    "Ctrl+C",
 		action: func(am appModel) string { return "Quit" },
+		when:   func(am appModel) bool { return true },
 	},
 }
 
@@ -71,6 +86,7 @@ var settingsHints = []hint{
 	{
 		key:    "↑/↓",
 		action: func(am appModel) string { return "Navigate" },
+		when:   func(am appModel) bool { return true },
 	},
 	{
 		key: "Enter",
@@ -80,6 +96,7 @@ var settingsHints = []hint{
 			}
 			return "Select"
 		},
+		when: func(am appModel) bool { return true },
 	},
 	{
 		key: "Esc",
@@ -89,10 +106,12 @@ var settingsHints = []hint{
 			}
 			return "Save/Back"
 		},
+		when: func(am appModel) bool { return true },
 	},
 	{
 		key:    "←/→",
 		action: func(am appModel) string { return "Cycle" },
+		when:   func(am appModel) bool { return true },
 	},
 }
 
@@ -252,7 +271,18 @@ func (am appModel) selectView(width, height int) string {
 	maxLen := width - 6
 
 	files := am.visibleFiles()
-	start := am.scrollOffset
+
+	if len(files) == 0 {
+		hasMedia := len(mediaFiles(am.torrent.Files())) > 0
+		if am.mediaOnly && !hasMedia {
+			return mutedStyle.Render("No media files found. Press Tab to show all files") + "\n"
+		} else if strings.TrimSpace(am.filterInput.Value()) != "" {
+			return mutedStyle.Render("No files match the filter") + "\n"
+		}
+		return mutedStyle.Render("No files") + "\n"
+	}
+
+	start := min(am.scrollOffset, len(files)-1)
 	end := start + visibleRows
 	if end > len(files) {
 		end = len(files)
@@ -307,22 +337,26 @@ func (am appModel) statsView(width int) string {
 		formatLine("Info Hash", am.torrent.InfoHash().HexString(), infoStyle, mutedStyle, width, am.tickCount),
 	)
 
-	f := am.visibleFiles()[am.cursor]
-	filename := filepath.Base(f.DisplayPath())
-	fileDir := filepath.Dir(f.DisplayPath())
-	fileExt := filepath.Ext(f.DisplayPath())
-	if fileExt != "" {
-		fileExt = fileExt[1:]
-	}
-	fileSize := f.Length()
+	files := am.visibleFiles()
+	fileInfo := selectedStyle.Render("No file selected")
+	if am.cursor < len(files) {
+		f := files[am.cursor]
+		filename := filepath.Base(f.DisplayPath())
+		fileDir := filepath.Dir(f.DisplayPath())
+		fileExt := filepath.Ext(f.DisplayPath())
+		if fileExt != "" {
+			fileExt = fileExt[1:]
+		}
+		fileSize := f.Length()
 
-	fileInfo := lipgloss.JoinVertical(lipgloss.Left,
-		headerStyle.Underline(true).Render("FILE INFO"),
-		formatLine("Name", filename, infoStyle, selectedStyle, width, am.tickCount),
-		formatLine("Directory", fileDir, infoStyle, normalStyle, width, am.tickCount),
-		formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width, am.tickCount),
-		formatLine("Type", fileExt, infoStyle, normalStyle, width, am.tickCount),
-	)
+		fileInfo = lipgloss.JoinVertical(lipgloss.Left,
+			headerStyle.Underline(true).Render("FILE INFO"),
+			formatLine("Name", filename, infoStyle, selectedStyle, width, am.tickCount),
+			formatLine("Directory", fileDir, infoStyle, normalStyle, width, am.tickCount),
+			formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width, am.tickCount),
+			formatLine("Type", fileExt, infoStyle, normalStyle, width, am.tickCount),
+		)
+	}
 
 	peersStr := fmt.Sprintf("%d/%d", am.torrent.Stats().ActivePeers, am.torrent.Stats().TotalPeers)
 	downloadSpeedStr := fmt.Sprintf("%s/s", humanSize(am.downloadSpeed))
@@ -369,14 +403,35 @@ func (am appModel) statsView(width int) string {
 }
 
 func (am appModel) footerView() string {
+	maxWidth := max(1, am.width-6)
 	footer := "  "
+
+	appendHint := func(footer, hintStr string) string {
+		candidate := footer + "  " + hintStr
+		if lipgloss.Width(candidate) <= maxWidth {
+			return candidate
+		}
+		return footer
+	}
+
 	if am.state == stateSettings {
 		for _, h := range settingsHints {
-			footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", formatHint(am, h))
+			footer = appendHint(footer, formatHint(am, h))
 		}
+	} else if am.filterActive {
+		fi := am.filterInput
+		fi.SetWidth(max(1, maxWidth-6))
+		footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", fi.View())
 	} else {
+		query := strings.TrimSpace(am.filterInput.Value())
+		if query != "" {
+			filterInfo := normalStyle.Render("Filter: ") + mutedStyle.Render(truncate(query, 10))
+			footer = appendHint(footer, filterInfo)
+		}
 		for _, h := range baseHints {
-			footer = lipgloss.JoinHorizontal(lipgloss.Center, footer, "  ", formatHint(am, h))
+			if h.when == nil || h.when(am) {
+				footer = appendHint(footer, formatHint(am, h))
+			}
 		}
 	}
 

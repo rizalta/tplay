@@ -61,39 +61,92 @@ func (am appModel) updateLoading(msg tea.Msg) (appModel, tea.Cmd) {
 }
 
 func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "up":
-			if am.cursor > 0 {
-				am.cursor--
-				if am.cursor < am.scrollOffset {
-					am.scrollOffset = am.cursor
-				}
-			}
-		case "down":
-			if am.cursor < len(am.visibleFiles())-1 {
-				am.cursor++
-				visibleRows := am.height - 12
-				if am.cursor >= am.scrollOffset+visibleRows {
-					am.scrollOffset = am.cursor - visibleRows + 1
-				}
-			}
-		case "enter":
-			am.file = am.visibleFiles()[am.cursor]
+	if am.filterActive {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "enter":
+				am.filterActive = false
+				am.filterInput.Blur()
+				return am, nil
 
-			if !isMedia(am.file.DisplayPath()) {
-				am.err = fmt.Errorf("not a media file")
-			} else {
-				setFilePriority(am.torrent, am.file, am.config.BufferPercent)
-				am.state = stateBuffer
+			case "esc":
+				if am.filterInput.Value() != "" {
+					am.filterInput.Reset()
+					am.cursor = 0
+					am.scrollOffset = 0
+				} else {
+					am.filterInput.Blur()
+					am.filterActive = false
+					am.cursor = 0
+					am.scrollOffset = 0
+				}
+				return am, nil
 			}
-		case "esc":
-			am.torrent = nil
+		}
+
+		var cmd tea.Cmd
+		prev := am.filterInput.Value()
+		am.filterInput, cmd = am.filterInput.Update(msg)
+
+		if am.filterInput.Value() != prev {
 			am.cursor = 0
 			am.scrollOffset = 0
-			am.err = nil
-			am.state = stateInput
+		}
+
+		return am, cmd
+	} else {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "up":
+				if am.cursor > 0 {
+					am.cursor--
+					if am.cursor < am.scrollOffset {
+						am.scrollOffset = am.cursor
+					}
+				}
+			case "down":
+				if am.cursor < len(am.visibleFiles())-1 {
+					am.cursor++
+					visibleRows := am.height - 12
+					if am.cursor >= am.scrollOffset+visibleRows {
+						am.scrollOffset = am.cursor - visibleRows + 1
+					}
+				}
+			case "/":
+				cmd := am.filterInput.Focus()
+				am.filterActive = true
+				return am, cmd
+
+			case "enter":
+				files := am.visibleFiles()
+				if len(files) == 0 {
+					return am, nil
+				}
+
+				am.cursor = min(am.cursor, len(files)-1)
+				am.file = files[am.cursor]
+
+				if !isMedia(am.file.DisplayPath()) {
+					am.err = fmt.Errorf("not a media file")
+				} else {
+					setFilePriority(am.torrent, am.file, am.config.BufferPercent)
+					am.state = stateBuffer
+				}
+			case "esc":
+				if am.filterInput.Value() != "" {
+					am.filterInput.Reset()
+					am.cursor = 0
+					am.scrollOffset = 0
+					return am, nil
+				}
+				am.torrent = nil
+				am.cursor = 0
+				am.scrollOffset = 0
+				am.err = nil
+				am.state = stateInput
+			}
 		}
 	}
 
