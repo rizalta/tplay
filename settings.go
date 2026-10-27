@@ -7,17 +7,9 @@ type settingsItem struct {
 	getValue func(*config) string
 	setValue func(*config, string) error
 	isBool   bool
-	isPlayer bool
 }
 
 var settingsItems = []settingsItem{
-	{
-		label: "Player",
-		getValue: func(c *config) string {
-			return c.Player
-		},
-		isPlayer: true,
-	},
 	{
 		label: "Read Ahead",
 		getValue: func(c *config) string {

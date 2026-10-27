@@ -6,59 +6,28 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
-type player struct {
-	name    string
-	command []string
-}
-
-var knownPlayers []player = []player{
-	{
-		name:    "mpv",
-		command: []string{"mpv"},
-	},
-	{
-		name: "vlc",
-		command: []string{
-			"vlc",
-			"/Applications/VLC.app/Contents/MacOS/VLC",
-		},
-	},
-	{
-		name: "iina",
-		command: []string{
-			"iina",
-			"iina-cli",
-			"/Applications/IINA.app/Contents/MacOS/iina",
-			"/Applications/IINA.app/Contents/MacOS/iina-cli",
-		},
-	},
-}
-
 type config struct {
-	Player        string `json:"player"`
-	ReadAhead     int64  `json:"read_ahead"`
-	Cache         int    `json:"cache"`
-	NoCache       bool   `json:"no_cache"`
-	BufferPercent int    `json:"buffer_percent"`
+	ReadAhead     int64 `json:"read_ahead"`
+	Cache         int   `json:"cache"`
+	NoCache       bool  `json:"no_cache"`
+	BufferPercent int   `json:"buffer_percent"`
 }
 
-func resolvePlayer(name string) (string, error) {
-	name = strings.ToLower(name)
-	for _, p := range knownPlayers {
-		if p.name == name {
-			for _, cmd := range p.command {
-				if path, err := exec.LookPath(cmd); err == nil {
-					return path, nil
-				}
-			}
+func resolveMPV() (string, error) {
+	cmds := []string{
+		"mpv",
+		"/opt/homebrew/bin/mpv",
+		"/usr/local/bin/mpv",
+	}
 
-			return "", fmt.Errorf("player %q not found", name)
+	for _, cmd := range cmds {
+		if path, err := exec.LookPath(cmd); err == nil {
+			return path, nil
 		}
 	}
-	return "", fmt.Errorf("unknown player %q", name)
+	return "", fmt.Errorf("mpv not found: please install mpv (https://mpv.io)")
 }
 
 func configPath() (string, error) {
@@ -72,7 +41,6 @@ func configPath() (string, error) {
 
 func defaultConfig() *config {
 	return &config{
-		Player:        "mpv",
 		ReadAhead:     62,
 		Cache:         0,
 		NoCache:       false,

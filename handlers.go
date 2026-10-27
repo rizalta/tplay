@@ -226,7 +226,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 			port := ln.Addr().(*net.TCPAddr).Port
 
-			playerPath, err := resolvePlayer(am.config.Player)
+			playerPath, err := resolveMPV()
 			if err != nil {
 				am.err = err
 				return am, nil
@@ -292,14 +292,6 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 			}
 
 		case "left", "right":
-			if s.isPlayer {
-				dir := 1
-				if msg.String() == "left" {
-					dir = -1
-				}
-				am.playerIdx = (am.playerIdx + dir + len(knownPlayers)) % len(knownPlayers)
-				am.config.Player = knownPlayers[am.playerIdx].name
-			}
 			if s.isBool {
 				current := s.getValue(am.config) == "true"
 				_ = s.setValue(am.config, strconv.FormatBool(!current))
@@ -309,7 +301,7 @@ func (am appModel) updateSettings(msg tea.Msg) (appModel, tea.Cmd) {
 			if s.isBool {
 				current := s.getValue(am.config) == "true"
 				_ = s.setValue(am.config, strconv.FormatBool(!current))
-			} else if !s.isPlayer {
+			} else {
 				am.err = nil
 				siStyles.Blurred.Text = selectedStyle
 				siStyles.Focused.Text = normalStyle

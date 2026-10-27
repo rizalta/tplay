@@ -219,12 +219,12 @@ func (am appModel) settingsPopup() string {
 		label := item.label
 		val := item.getValue(am.config)
 
-		if item.isPlayer || item.isBool {
+		if item.isBool {
 			val = "← " + val + " →"
 		}
 
 		if i == am.settingsCursor {
-			if am.settingsEdit && !item.isBool && !item.isPlayer {
+			if am.settingsEdit && !item.isBool {
 				if am.err != nil {
 					val = errStyle.Render(am.settingsInput.View())
 				} else {
@@ -309,7 +309,7 @@ func (am appModel) statsView(width int) string {
 
 	status := headerStyle.Render("Status: ")
 	if am.done {
-		status += infoStyle.Render("Playing on " + am.config.Player)
+		status += infoStyle.Render("Playing on mpv")
 	} else if renderState == stateBuffer {
 		status += selectedStyle.Render("Buffering " + am.spinner.View())
 	} else {

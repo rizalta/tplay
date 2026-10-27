@@ -47,7 +47,6 @@ type appModel struct {
 	filterInput  textinput.Model
 	filterActive bool
 
-	playerIdx      int
 	settingsCursor int
 	settingsEdit   bool
 	settingsInput  textinput.Model
@@ -93,13 +92,6 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	s := spinner.New()
 	s.Spinner = spinner.Line
 
-	playerIdx := slices.IndexFunc(knownPlayers, func(p player) bool {
-		return p.name == cfg.Player
-	})
-	if playerIdx == -1 {
-		playerIdx = 0
-	}
-
 	return &appModel{
 		config:          cfg,
 		sessionTorrents: make(map[string]struct{}),
@@ -109,7 +101,6 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 		input:           ti,
 		spinner:         s,
 		filterInput:     fi,
-		playerIdx:       playerIdx,
 		settingsInput:   si,
 		dataDir:         dataDir,
 		client:          c,
