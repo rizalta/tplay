@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 )
 
 type config struct {
@@ -30,13 +31,33 @@ func resolveMPV() (string, error) {
 	return "", fmt.Errorf("mpv not found: please install mpv (https://mpv.io)")
 }
 
+func configDir() (string, error) {
+	if runtime.GOOS == "windows" {
+		dir, err := os.UserConfigDir()
+		if err == nil {
+			return filepath.Join(dir, "tplay"), nil
+		}
+	}
+
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "tplay"), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("home dir not found: %w", err)
+	}
+
+	return filepath.Join(home, ".config", "tplay"), nil
+}
+
 func configPath() (string, error) {
-	configDir, err := os.UserConfigDir()
+	dir, err := configDir()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(configDir, "tplay", "config.json"), nil
+	return filepath.Join(dir, "tplay", "config.json"), nil
 }
 
 func defaultConfig() *config {
