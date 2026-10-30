@@ -57,7 +57,7 @@ func configPath() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(dir, "tplay", "config.json"), nil
+	return filepath.Join(dir, "config.json"), nil
 }
 
 func defaultConfig() *config {
