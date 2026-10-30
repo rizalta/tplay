@@ -336,13 +336,21 @@ func (am appModel) statsView(width int) string {
 		}
 		fileSize := f.Length()
 
-		fileInfo = lipgloss.JoinVertical(lipgloss.Left,
+		fieldLines := []string{
 			headerStyle.Underline(true).Render("FILE INFO"),
 			formatLine("Name", filename, infoStyle, selectedStyle, width, am.tickCount),
 			formatLine("Directory", fileDir, infoStyle, normalStyle, width, am.tickCount),
 			formatLine("Size", humanSize(fileSize), infoStyle, normalStyle, width, am.tickCount),
 			formatLine("Type", fileExt, infoStyle, normalStyle, width, am.tickCount),
-		)
+		}
+		if am.config.ResumePlayback && am.resumeStore != nil {
+			if entry, ok := am.resumeStore.get(am.torrent.InfoHash().HexString(), f.DisplayPath()); ok {
+				progressInfo := fmt.Sprintf("%s / %s", formatDuration(entry.Position), formatDuration(entry.Duration))
+				fieldLines = append(fieldLines, formatLine("Progress", progressInfo, infoStyle, normalStyle, width, am.tickCount))
+			}
+		}
+
+		fileInfo = lipgloss.JoinVertical(lipgloss.Left, fieldLines...)
 	}
 
 	peersStr := fmt.Sprintf("%d/%d", am.torrent.Stats().ActivePeers, am.torrent.Stats().TotalPeers)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -232,7 +232,19 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 				return am, nil
 			}
 
-			playerCmd := exec.Command(playerPath, fmt.Sprintf("http://localhost:%d/stream", port))
+			var resumeSec float64
+			infoHash := am.torrent.InfoHash().HexString()
+			filePath := am.file.DisplayPath()
+			if am.config.ResumePlayback && am.resumeStore != nil {
+				if entry, ok := am.resumeStore.get(infoHash, filePath); ok {
+					resumeSec = entry.Position
+				}
+			}
+
+			sockPath := filepath.Join(os.TempDir(), fmt.Sprintf("tplay-%d.sock", time.Now().UnixNano()))
+			tracker := newPlayerTracker(sockPath)
+
+			playerCmd := mpvCmd(playerPath, fmt.Sprintf("http://localhost:%d/stream", port), sockPath, resumeSec)
 			if err := playerCmd.Start(); err != nil {
 				am.err = err
 				return am, nil
@@ -244,6 +256,11 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 				_ = playerCmd.Wait()
 				_ = reader.Close()
 				_ = ln.Close()
+
+				if tracker != nil && am.resumeStore != nil {
+					finalPos, dur := tracker.stop()
+					_ = am.resumeStore.recordPlayback(infoHash, filePath, finalPos, dur)
+				}
 
 				return playerStoppedMsg{}
 			}

@@ -25,6 +25,22 @@ var settingsItems = []settingsItem{
 		},
 	},
 	{
+		label: "Resume Playback",
+		getValue: func(c *config) string {
+			return strconv.FormatBool(c.ResumePlayback)
+		},
+		setValue: func(c *config, s string) error {
+			resumePlayback, err := strconv.ParseBool(s)
+			if err != nil {
+				return err
+			}
+
+			c.ResumePlayback = resumePlayback
+			return nil
+		},
+		isBool: true,
+	},
+	{
 		label: "Cache",
 		getValue: func(c *config) string {
 			return strconv.Itoa(c.Cache)

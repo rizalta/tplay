@@ -48,10 +48,12 @@ func main() {
 
 	if cfg.NoCache {
 		if am, ok := res.(appModel); ok {
-			for name := range am.sessionTorrents {
+			for name, hash := range am.sessionTorrents {
 				for _, p := range torrentPaths(dataDir, name) {
 					_ = os.RemoveAll(p)
 				}
+
+				_ = am.resumeStore.removeTorrent(hash)
 			}
 		}
 	}

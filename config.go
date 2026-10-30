@@ -4,41 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 )
 
 type config struct {
-	ReadAhead     int64 `json:"read_ahead"`
-	Cache         int   `json:"cache"`
-	NoCache       bool  `json:"no_cache"`
-	BufferPercent int   `json:"buffer_percent"`
-}
-
-func resolveMPV() (string, error) {
-	cmds := []string{
-		"mpv",
-		"/opt/homebrew/bin/mpv",
-		"/usr/local/bin/mpv",
-	}
-
-	for _, cmd := range cmds {
-		if path, err := exec.LookPath(cmd); err == nil {
-			return path, nil
-		}
-	}
-	return "", fmt.Errorf("mpv not found: please install mpv (https://mpv.io)")
+	ReadAhead      int64 `json:"read_ahead"`
+	Cache          int   `json:"cache"`
+	NoCache        bool  `json:"no_cache"`
+	BufferPercent  int   `json:"buffer_percent"`
+	ResumePlayback bool  `json:"resume_playback"`
 }
 
 func configDir() (string, error) {
-	if runtime.GOOS == "windows" {
-		dir, err := os.UserConfigDir()
-		if err == nil {
-			return filepath.Join(dir, "tplay"), nil
-		}
-	}
-
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "tplay"), nil
 	}
@@ -62,10 +39,11 @@ func configPath() (string, error) {
 
 func defaultConfig() *config {
 	return &config{
-		ReadAhead:     62,
-		Cache:         0,
-		NoCache:       false,
-		BufferPercent: 1,
+		ReadAhead:      62,
+		Cache:          0,
+		NoCache:        false,
+		BufferPercent:  1,
+		ResumePlayback: false,
 	}
 }
 

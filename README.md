@@ -6,8 +6,9 @@ Stream torrents directly to your media player from the terminal.
 
 - Stream from magnet links without downloading the full file
 - Auto-selects single media files, file picker for multi-file torrents
+- Resume playback from where you left off
 - Name-sorted file list with live filtering
-- Supports **mpv**, **VLC**, and **IINA**
+- Powered by **mpv** with real-time IPC tracking
 - Cache management with TTL cleanup and no-cache mode
 
 ## Install
@@ -52,25 +53,25 @@ Config is stored at `~/.config/tplay/config.json` and is created automatically o
 
 ```json
 {
-  "player": "mpv",
   "read_ahead": 62,
   "cache": 0,
   "no_cache": false,
-  "buffer_percent": 1
+  "buffer_percent": 1,
+  "resume_playback": true
 }
 ```
 
-| Field            | Description                                            |
-|------------------|--------------------------------------------------------|
-| `player`         | Media player to use (`mpv`, `vlc`, `iina`)             |
-| `read_ahead`     | Read-ahead buffer size in MB                           |
-| `cache`          | Delete torrents older than N days (`0` = keep forever) |
-| `no_cache`       | Delete all torrents from this session on exit          |
-| `buffer_percent` | Percentage of file to buffer before playback starts    |
+| Field             | Description                                            |
+|-------------------|--------------------------------------------------------|
+| `read_ahead`      | Read-ahead buffer size in MB                           |
+| `cache`           | Delete torrents older than N days (`0` = keep forever) |
+| `no_cache`        | Delete all torrents from this session on exit          |
+| `buffer_percent`  | Percentage of file to buffer before playback starts    |
+| `resume_playback` | Resume video playback from last position               |
 
 Settings can also be changed inside the app with `Ctrl+S`.
 
 ## Requirements
 
 - Go 1.21+
-- One of: [mpv](https://mpv.io), [VLC](https://www.videolan.org), [IINA](https://iina.io)
+- [mpv](https://mpv.io) (macOS and Linux)

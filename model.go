@@ -27,7 +27,7 @@ const (
 
 type appModel struct {
 	config          *config
-	sessionTorrents map[string]struct{}
+	sessionTorrents map[string]string
 
 	width     int
 	height    int
@@ -51,11 +51,12 @@ type appModel struct {
 	settingsEdit   bool
 	settingsInput  textinput.Model
 
-	dataDir   string
-	torrent   *torrent.Torrent
-	client    *torrent.Client
-	file      *torrent.File
-	playerCmd *exec.Cmd
+	dataDir     string
+	torrent     *torrent.Torrent
+	client      *torrent.Client
+	file        *torrent.File
+	playerCmd   *exec.Cmd
+	resumeStore *resumeStore
 
 	cancelLoad context.CancelFunc
 	done       bool
@@ -92,9 +93,12 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 	s := spinner.New()
 	s.Spinner = spinner.Line
 
+	r := newResumeStore()
+	_ = r.cleanOldEntries(cfg.Cache)
+
 	return &appModel{
 		config:          cfg,
-		sessionTorrents: make(map[string]struct{}),
+		sessionTorrents: make(map[string]string),
 		state:           stateInput,
 		prevState:       stateInput,
 		mediaOnly:       true,
@@ -104,6 +108,7 @@ func newAppModel(c *torrent.Client, cfg *config, dataDir string) *appModel {
 		settingsInput:   si,
 		dataDir:         dataDir,
 		client:          c,
+		resumeStore:     r,
 	}
 }
 
@@ -151,7 +156,7 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		am.torrent = msg.torrent
-		am.sessionTorrents[am.torrent.Name()] = struct{}{}
+		am.sessionTorrents[am.torrent.Name()] = am.torrent.InfoHash().HexString()
 		am.cursor = 0
 		am.scrollOffset = 0
 		am.filterInput.Reset()

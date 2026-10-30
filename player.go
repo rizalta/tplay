@@ -107,6 +107,21 @@ func (t *playerTracker) stop() (float64, float64) {
 	return t.pos, t.dur
 }
 
+func resolveMPV() (string, error) {
+	cmds := []string{
+		"mpv",
+		"/opt/homebrew/bin/mpv",
+		"/usr/local/bin/mpv",
+	}
+
+	for _, cmd := range cmds {
+		if path, err := exec.LookPath(cmd); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("mpv not found: please install mpv (https://mpv.io)")
+}
+
 func mpvCmd(playerPath, streamURL, sockPath string, resumeSec float64) *exec.Cmd {
 	var args []string
 
