@@ -34,11 +34,14 @@ func main() {
 		log.Printf("error cleaning cache: %v", err)
 	}
 
-	c, err := newClient(dataDir)
+	c, closeStore, err := newClient(dataDir)
 	if err != nil {
 		log.Fatalf("failed to initialize torrent client: %v", err)
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.Close()
+		_ = closeStore()
+	}()
 
 	app := tea.NewProgram(newAppModel(c, cfg, dataDir))
 	res, err := app.Run()

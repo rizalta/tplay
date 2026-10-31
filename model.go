@@ -167,6 +167,7 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
 			am.file = files[0]
 			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
+			am.prevBytes = am.file.BytesCompleted()
 			nextState = stateBuffer
 		} else {
 			nextState = stateSelect

@@ -10,20 +10,30 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/anacrolix/generics"
+
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/storage"
 )
 
-func newClient(dataDir string) (*torrent.Client, error) {
+func newClient(dataDir string) (*torrent.Client, func() error, error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = dataDir
 	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
+	store := storage.NewFileOpts(storage.NewFileClientOpts{
+		ClientBaseDir: dataDir,
+		UsePartFiles:  g.Some(false),
+		Logger:        cfg.Slogger,
+	})
+	cfg.DefaultStorage = store
+
 	c, err := torrent.NewClient(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return c, err
+	return c, store.Close, err
 }
 
 func cleanOldCache(dataDir string, maxDays int) error {

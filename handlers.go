@@ -131,6 +131,7 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 					am.err = fmt.Errorf("not a media file")
 				} else {
 					setFilePriority(am.torrent, am.file, am.config.BufferPercent)
+					am.prevBytes = am.file.BytesCompleted()
 					am.state = stateBuffer
 				}
 			case "esc":
@@ -172,6 +173,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			am.done = false
 			am.file = nil
 			am.downloadSpeed = 0
+			am.prevBytes = 0
 			am.state = stateSelect
 
 			return am, nil
@@ -282,6 +284,7 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 		}
 		am.done = false
 		am.downloadSpeed = 0
+		am.prevBytes = 0
 		am.state = stateSelect
 		am.file = nil
 
