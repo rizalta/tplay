@@ -155,7 +155,12 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return am, nil
 		}
 
+		if am.torrent != nil && am.torrent != msg.torrent {
+			am.torrent.Drop()
+		}
+
 		am.torrent = msg.torrent
+		am.file = nil
 		am.sessionTorrents[am.torrent.Name()] = am.torrent.InfoHash().HexString()
 		am.cursor = 0
 		am.scrollOffset = 0
@@ -167,7 +172,8 @@ func (am appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(files) == 1 && isMedia(files[0].DisplayPath()) {
 			am.file = files[0]
 			setFilePriority(am.torrent, am.file, am.config.BufferPercent)
-			am.prevBytes = am.file.BytesCompleted()
+			stats := am.torrent.Stats()
+			am.prevBytes = stats.BytesReadUsefulData.Int64()
 			nextState = stateBuffer
 		} else {
 			nextState = stateSelect

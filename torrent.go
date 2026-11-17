@@ -11,6 +11,7 @@ import (
 	"time"
 
 	g "github.com/anacrolix/generics"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/storage"
@@ -20,6 +21,9 @@ func newClient(dataDir string) (*torrent.Client, func() error, error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = dataDir
 	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg.Seed = true
+	cfg.DropMutuallyCompletePeers = false
+	cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(500<<10), 256<<10)
 
 	store := storage.NewFileOpts(storage.NewFileClientOpts{
 		ClientBaseDir: dataDir,

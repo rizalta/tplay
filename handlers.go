@@ -131,7 +131,8 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 					am.err = fmt.Errorf("not a media file")
 				} else {
 					setFilePriority(am.torrent, am.file, am.config.BufferPercent)
-					am.prevBytes = am.file.BytesCompleted()
+					stats := am.torrent.Stats()
+					am.prevBytes = stats.BytesReadUsefulData.Int64()
 					am.state = stateBuffer
 				}
 			case "esc":
@@ -141,7 +142,11 @@ func (am appModel) updateSelect(msg tea.Msg) (appModel, tea.Cmd) {
 					am.scrollOffset = 0
 					return am, nil
 				}
+				if am.torrent != nil {
+					am.torrent.Drop()
+				}
 				am.torrent = nil
+				am.file = nil
 				am.cursor = 0
 				am.scrollOffset = 0
 				am.err = nil
@@ -183,7 +188,8 @@ func (am appModel) updateBuffer(msg tea.Msg) (appModel, tea.Cmd) {
 			return am, nil
 		}
 
-		curr := am.torrent.BytesCompleted()
+		stats := am.torrent.Stats()
+		curr := stats.BytesReadUsefulData.Int64()
 		if curr >= am.prevBytes {
 			am.downloadSpeed = curr - am.prevBytes
 		}
