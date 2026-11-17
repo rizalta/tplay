@@ -9,6 +9,7 @@ Stream torrents directly to your media player from the terminal.
 - Resume playback from where you left off
 - Name-sorted file list with live filtering
 - Powered by **mpv** with real-time IPC tracking
+- Seeds while running, with a configurable upload cap
 - Cache management with TTL cleanup and no-cache mode
 
 ## Install
@@ -58,7 +59,7 @@ Config is stored at `~/.config/tplay/config.json` and is created automatically o
   "cache": 0,
   "no_cache": false,
   "buffer_percent": 1,
-  "resume_playback": true
+  "resume_playback": false
 }
 ```
 
@@ -73,7 +74,10 @@ Config is stored at `~/.config/tplay/config.json` and is created automatically o
 
 Settings can also be changed inside the app with `Ctrl+S`.
 
+tplay keeps seeding while it is running, including after playback stops.
+`upload_rate` caps that traffic in KiB/s; set it to `0` for no limit.
+
 ## Requirements
 
-- Go 1.21+
+- Go 1.26.5+
 - [mpv](https://mpv.io) (macOS and Linux)
