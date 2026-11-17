@@ -34,7 +34,7 @@ func main() {
 		log.Printf("error cleaning cache: %v", err)
 	}
 
-	c, closeStore, err := newClient(dataDir)
+	c, closeStore, err := newClient(dataDir, cfg.UploadRate)
 	if err != nil {
 		log.Fatalf("failed to initialize torrent client: %v", err)
 	}

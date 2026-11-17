@@ -17,13 +17,28 @@ import (
 	"github.com/anacrolix/torrent/storage"
 )
 
-func newClient(dataDir string) (*torrent.Client, func() error, error) {
+var uploadLimiter = rate.NewLimiter(rate.Inf, 256<<10)
+
+// setUploadRate applies a KiB/s upload cap. Zero or less means unlimited.
+func setUploadRate(kibPerSec int) {
+	if kibPerSec <= 0 {
+		uploadLimiter.SetLimit(rate.Inf)
+		return
+	}
+
+	uploadLimiter.SetBurst(max(256<<10, kibPerSec<<10))
+	uploadLimiter.SetLimit(rate.Limit(kibPerSec << 10))
+}
+
+func newClient(dataDir string, uploadRate int) (*torrent.Client, func() error, error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = dataDir
 	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	cfg.Seed = true
 	cfg.DropMutuallyCompletePeers = false
-	cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(500<<10), 256<<10)
+
+	setUploadRate(uploadRate)
+	cfg.UploadRateLimiter = uploadLimiter
 
 	store := storage.NewFileOpts(storage.NewFileClientOpts{
 		ClientBaseDir: dataDir,

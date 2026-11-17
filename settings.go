@@ -25,6 +25,24 @@ var settingsItems = []settingsItem{
 		},
 	},
 	{
+		label: "Upload Rate",
+		getValue: func(c *config) string {
+			return strconv.Itoa(c.UploadRate)
+		},
+		setValue: func(c *config, s string) error {
+			n, err := strconv.Atoi(s)
+			if err != nil {
+				return err
+			}
+			if n < 0 {
+				n = 0
+			}
+			c.UploadRate = n
+			setUploadRate(n)
+			return nil
+		},
+	},
+	{
 		label: "Resume Playback",
 		getValue: func(c *config) string {
 			return strconv.FormatBool(c.ResumePlayback)

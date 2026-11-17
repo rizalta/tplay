@@ -9,6 +9,7 @@ import (
 
 type config struct {
 	ReadAhead      int64 `json:"read_ahead"`
+	UploadRate     int   `json:"upload_rate"`
 	Cache          int   `json:"cache"`
 	NoCache        bool  `json:"no_cache"`
 	BufferPercent  int   `json:"buffer_percent"`
@@ -40,6 +41,7 @@ func configPath() (string, error) {
 func defaultConfig() *config {
 	return &config{
 		ReadAhead:      62,
+		UploadRate:     500,
 		Cache:          0,
 		NoCache:        false,
 		BufferPercent:  1,
@@ -65,6 +67,10 @@ func loadConfig() *config {
 
 	if cfg.BufferPercent <= 0 {
 		cfg.BufferPercent = 1
+	}
+
+	if cfg.UploadRate < 0 {
+		cfg.UploadRate = 0
 	}
 
 	return cfg

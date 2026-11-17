@@ -54,6 +54,7 @@ Config is stored at `~/.config/tplay/config.json` and is created automatically o
 ```json
 {
   "read_ahead": 62,
+  "upload_rate": 500,
   "cache": 0,
   "no_cache": false,
   "buffer_percent": 1,
@@ -64,6 +65,7 @@ Config is stored at `~/.config/tplay/config.json` and is created automatically o
 | Field             | Description                                            |
 |-------------------|--------------------------------------------------------|
 | `read_ahead`      | Read-ahead buffer size in MB                           |
+| `upload_rate`     | Upload rate limit in KiB/s (`0` = unlimited)           |
 | `cache`           | Delete torrents older than N days (`0` = keep forever) |
 | `no_cache`        | Delete all torrents from this session on exit          |
 | `buffer_percent`  | Percentage of file to buffer before playback starts    |
